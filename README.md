@@ -6,7 +6,12 @@ stabs with subtle tone and timbre variation, different chords, and different
 reverb/delay tails. You can audition them, chop the tails, and export WAVs:
 the full mix, or dry and tail stems you can chop or let ring out.
 
-## Run it
+## Use it
+
+Live at **https://alecwhiting-sudo.github.io/AlecSandbox1/**, deployed automatically from `main`
+by `.github/workflows/pages.yml`.
+
+## Run it locally
 
 ```bash
 npm install
