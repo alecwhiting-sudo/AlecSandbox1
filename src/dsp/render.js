@@ -184,6 +184,12 @@ export function renderStab(patch, notes, opts = {}) {
   const wetL = new Float32Array(capacity), wetR = new Float32Array(capacity);
 
   const BLOCK = 512;
+  // The tail is only "finished" after a silence longer than the gap between
+  // echoes, otherwise a short stab with a long delay would be cut before its
+  // first repeat.
+  const delayGap = delay ? Math.max(delay.dL, delay.dR) : 0;
+  const preGap = reverb ? reverb.pre : 0;
+  const quietNeeded = Math.max(6, Math.ceil((delayGap * 1.15 + preGap + 0.05 * sr) / BLOCK));
   let peak = 1e-9, quietBlocks = 0, end = capacity;
   for (let start = 0; start < capacity; start += BLOCK) {
     const stop = Math.min(capacity, start + BLOCK);
@@ -228,7 +234,7 @@ export function renderStab(patch, notes, opts = {}) {
     if (blockPeak > peak) peak = blockPeak;
     // After the dry part, stop once the tail is ~80 dB below the peak.
     if (stop > dryLength) {
-      if (blockPeak < peak * 1e-4) { if (++quietBlocks >= 6) { end = stop; break; } }
+      if (blockPeak < peak * 1e-4) { if (++quietBlocks >= quietNeeded) { end = stop; break; } }
       else quietBlocks = 0;
     }
   }

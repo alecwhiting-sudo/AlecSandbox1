@@ -316,7 +316,7 @@ function loadPreset(id) {
   const pr = PRESET_BY_ID[id];
   if (pr?.chord && !s.customNotes) Object.assign(s.chord, pr.chord);
   $('#preset-title').textContent = pr?.name ?? 'Character';
-  buildKitPanel(); buildChordPanel(); buildSoundPanel();
+  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip();
   regenerate({ audition: true });
 }
 
@@ -469,9 +469,36 @@ function buildExportPanel() {
 // ---------------------------------------------------------------- macros
 function buildMacros() {
   const root = $('#macros');
+  for (const m of MACROS) if (state.settings.macros[m.id] == null) state.settings.macros[m.id] = 0.5;
   root.replaceChildren(...MACROS.map((m) => knob(m, state.settings.macros[m.id], (v) => {
     state.settings.macros[m.id] = v; regenerate({ audition: true });
   })));
+  buildDelayStrip();
+}
+
+// Quick delay controls next to the macros (edit the base sound).
+function buildDelayStrip() {
+  const root = $('#delay-strip');
+  if (!root) return;
+  const d = currentBase().delay;
+  const mode = d.send <= 0 ? 'off' : d.mode;
+  const set = (fn) => { const p = editablePatch(); fn(p.delay); markEdited(); buildSoundPanel(); buildDelayStrip(); regenerate({ audition: true }); };
+  const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Delay style' },
+    ...[['pingpong', 'Ping-pong'], ['stereo', 'Stereo'], ['tape', 'Tape'], ['off', 'Off']].map(([v, label]) =>
+      el('button', { class: mode === v ? 'on' : '', onclick: () => set((x) => {
+        if (v === 'off') { if (x.send > 0) x.lastSend = x.send; x.send = 0; }
+        else { x.mode = v; if (x.send <= 0) x.send = x.lastSend || 0.25; }
+      }) }, label)));
+  root.replaceChildren(
+    el('span', { class: 'lbl' }, 'Delay'), seg,
+    el('div', { class: 'strip-ctl' }, selectInput(['1/16', '1/16d', '1/8t', '1/8', '1/8d', '1/4t', '1/4', '1/4d', '1/2'], d.division, (v) => set((x) => { x.division = v; }))),
+    el('div', { class: 'strip-ctl wide' }, rangeInput({ label: 'Amount', min: 0, max: 1, step: 0.01 }, d.send, (v) => {
+      const p = editablePatch(); p.delay.send = v; markEdited(); regenerate({ audition: true });
+    })),
+    el('div', { class: 'strip-ctl wide' }, rangeInput({ label: 'Feedback', min: 0, max: 0.95, step: 0.01 }, d.feedback, (v) => {
+      const p = editablePatch(); p.delay.feedback = v; markEdited(); regenerate({ audition: true });
+    })),
+  );
 }
 
 // ---------------------------------------------------------------- sound design panel
@@ -502,6 +529,7 @@ function buildSoundPanel() {
         setPath(editablePatch(), prm.path, v);
         markEdited();
         if (prm.path.endsWith('.type') && sec.id.startsWith('osc')) buildSoundPanel();
+        if (prm.path.startsWith('delay.')) buildDelayStrip();
         regenerate({ audition: true });
       };
       if (prm.kind === 'range') grid.append(rangeInput(prm, value, onChange));

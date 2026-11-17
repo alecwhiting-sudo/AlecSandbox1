@@ -101,6 +101,7 @@ export const MACROS = [
   { id: 'move', label: 'Movement', hint: 'Envelope follower, drift, chorus, wow' },
   { id: 'grit', label: 'Grit', hint: 'Saturation and filter drive' },
   { id: 'space', label: 'Space', hint: 'Delay and reverb sends and tail length' },
+  { id: 'width', label: 'Width', hint: 'Stereo width: mono at 0, extra wide at max' },
 ];
 
 export const defaultMacros = () => Object.fromEntries(MACROS.map((m) => [m.id, 0.5]));
@@ -114,6 +115,7 @@ export function applyMacros(patch, macros) {
   const mv = ((macros.move ?? 0.5) - 0.5) * 2;
   const g = ((macros.grit ?? 0.5) - 0.5) * 2;
   const s = ((macros.space ?? 0.5) - 0.5) * 2;
+  const w = ((macros.width ?? 0.5) - 0.5) * 2;
 
   p.filterA.env = clamp(p.filterA.env + b * 1.5, -6, 8);
   p.amp.a = clamp(p.amp.a * Math.pow(2, -b * 2), 0.0003, 2);
@@ -144,6 +146,16 @@ export function applyMacros(patch, macros) {
   p.reverb.send = clamp(p.reverb.send * Math.pow(2, s * 1.6) + Math.max(0, s) * 0.05, 0, 1);
   p.reverb.decay = clamp(p.reverb.decay * Math.pow(2, s * 1.2), 0.2, 20);
   p.delay.feedback = clamp(p.delay.feedback + s * 0.18, 0, 0.92);
+
+  // Width: below centre narrows towards mono, above spreads voices, unison,
+  // chorus and the tails wider (mid/side up to 1.6).
+  const wMul = w < 0 ? 1 + w : 1; // 0 at full left = mono
+  p.width = clamp(p.width * wMul + Math.max(0, w) * 0.6, 0, 1.6);
+  p.voiceSpread = clamp(p.voiceSpread * wMul + Math.max(0, w) * 0.5, 0, 1);
+  for (const o of p.osc) o.spread = clamp(o.spread * wMul + Math.max(0, w) * 0.3, 0, 1);
+  p.chorus.mix = clamp(p.chorus.mix + Math.max(0, w) * 0.15, 0, 1);
+  p.reverb.width = clamp(p.reverb.width * wMul + Math.max(0, w) * 0.5, 0, 1.5);
+  p.delay.offset = clamp((p.delay.offset ?? 0.12) + Math.max(0, w) * 0.1, 0, 0.5);
   return p;
 }
 

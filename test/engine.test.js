@@ -128,3 +128,29 @@ test('export length modes and normalisation', () => {
   assert.ok(Math.abs(peak - Math.pow(10, -1 / 20)) < 0.01, `peak ${peak}`);
   assert.equal(prep.mix[0][prep.length - 1], 0, 'faded to zero');
 });
+
+test('width macro: mono at 0, wider than default at 1, and renders are stereo', () => {
+  const corr = (r) => {
+    let lr = 0, ll = 0, rr = 0;
+    for (let i = 0; i < r.dryLength; i++) { const l = r.dry[0][i], x = r.dry[1][i]; lr += l * x; ll += l * l; rr += x * x; }
+    return lr / Math.sqrt(ll * rr + 1e-12);
+  };
+  const base = presetPatch('detroit-strings');
+  const render = (w) => renderStab(applyMacros(base, { ...defaultMacros(), width: w }), [57, 60, 64, 67], { sr: SR, seed: 5, maxTail: 1 });
+  const mono = render(0), mid = render(0.5), wide = render(1);
+  assert.ok(corr(mono) > 0.999, `mono corr ${corr(mono)}`);
+  assert.ok(corr(mid) < 0.99, 'default is stereo');
+  assert.ok(corr(wide) < corr(mid), `wide ${corr(wide)} vs ${corr(mid)}`);
+});
+
+test('ping-pong delay alternates sides', () => {
+  const p = presetPatch('dub-chord');
+  p.reverb.send = 0; p.delay = { ...p.delay, mode: 'pingpong', send: 1, feedback: 0.5, division: '1/4', wow: 0 };
+  p.gate = 0.1; p.amp.r = 0.02;
+  const r = renderStab(p, [57], { sr: SR, bpm: 120, seed: 1, maxTail: 3 });
+  const beat = SR * 0.5;
+  const energy = (ch, a) => { let e = 0; for (let i = a; i < a + beat * 0.5; i++) e += ch[i] * ch[i]; return e; };
+  const [wl, wr] = r.wet;
+  assert.ok(energy(wl, beat) > energy(wr, beat) * 10, 'first repeat left');
+  assert.ok(energy(wr, beat * 2) > energy(wl, beat * 2) * 10, 'second repeat right');
+});
