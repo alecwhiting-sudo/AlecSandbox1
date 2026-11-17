@@ -20,6 +20,7 @@ export const PRESETS = [
       delay: { send: 0.45, mode: 'pingpong', division: '1/8d', feedback: 0.62, lpf: 2600, hpf: 300, sat: 0.35, wow: 0.35 },
       reverb: { send: 0.35, type: 'hall', size: 0.85, decay: 5.5, damping: 0.6, hpf: 300 },
       delayToReverb: 0.6, duck: { amount: 0.45 },
+      texture: { crackle: 0.2, density: 0.35, hiss: 0.12 },
     },
   },
   {
@@ -123,7 +124,24 @@ export const PRESETS = [
       amp: { a: 0.001, d: 0.12, s: 0, r: 0.05 }, gate: 0.15,
       filterA: { type: 'svf-bp', cutoff: 1500, res: 0.3, env: 1, follow: 0 },
       reverb: { send: 0.55, type: 'spring', decay: 2.6, size: 0.4 },
-      delay: { send: 0.35, mode: 'tape', division: '1/4d', feedback: 0.55, wow: 0.5, lpf: 2500 },
+      delay: { send: 0.35, mode: 'tape', division: '1/4d', feedback: 0.55, wow: 0.5, lpf: 2500, grit: 0.65 },
+      texture: { crackle: 0.35, density: 0.45, hiss: 0.2 },
+    },
+  },
+
+  {
+    id: 'dusty-tape', name: 'Dusty Tape Chord', analog: 0.95, chord: { type: 'min9', voicing: 'drop2' },
+    patch: {
+      osc: [{ on: true, type: 'pulse', level: 0.6, pw: 0.38 }, { on: true, type: 'organ', level: 0.4, drawbars: [0, 0, 8, 6, 0, 3, 0, 0, 0] }, off],
+      noise: { level: 0.06, air: 0.12, airColour: 0.55 }, drift: 8,
+      amp: { a: 0.004, d: 0.5, s: 0.25, r: 0.3 }, fenv: { d: 0.3, s: 0.1 }, gate: 0.4,
+      filterA: { type: 'ladder', cutoff: 900, res: 0.2, drive: 0.3, env: 2.2, follow: 0.5 },
+      filterB: { type: 'svf-hp12', cutoff: 160 },
+      colour: { mode: 'tape', drive: 0.45 }, chorus: { mix: 0.35, mode: 'juno' },
+      eq: { highCut: 9000, tilt: -0.2 },
+      delay: { send: 0.45, mode: 'tape', division: '1/4d', feedback: 0.6, lpf: 3200, hpf: 180, wow: 0.6, grit: 0.85 },
+      reverb: { send: 0.2, type: 'spring', decay: 2.2 },
+      texture: { crackle: 0.55, density: 0.5, tone: 0.4, hiss: 0.35, follow: 0.4 },
     },
   },
 

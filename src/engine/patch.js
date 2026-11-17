@@ -21,7 +21,8 @@ export function defaultPatch() {
     name: 'Init',
     osc: [layer({ on: true, type: 'saw', level: 0.7 }), layer({ type: 'pulse', level: 0.4, fine: 7 }), layer({ type: 'sine', level: 0.3 })],
     sub: { level: 0.2, octave: -1, wave: 'sine' },
-    noise: { level: 0.08, decay: 0.015, colour: 0.7 },
+    noise: { level: 0.08, decay: 0.015, colour: 0.7, air: 0, airColour: 0.7 },
+    texture: { crackle: 0, density: 0.4, tone: 0.5, hiss: 0, follow: 0.6 },
     drift: 3, driftRate: 0.6,
     pitchEnv: { amount: 0, decay: 0.03 },
     amp: { a: 0.002, d: 0.35, s: 0.25, r: 0.25, curve: 0.6, attackCurve: 0.3 },
@@ -37,7 +38,7 @@ export function defaultPatch() {
     chorus: { mix: 0, rate: 0.5, depth: 0.5, mode: 'juno' },
     eq: { lowCut: 35, highCut: 17000, tilt: 0 },
     width: 1,
-    delay: { send: 0.2, mode: 'pingpong', division: '1/8d', feedback: 0.42, lpf: 4500, hpf: 220, sat: 0.2, wow: 0.2, offset: 0.12 },
+    delay: { send: 0.2, mode: 'pingpong', division: '1/8d', feedback: 0.42, lpf: 4500, hpf: 220, sat: 0.2, wow: 0.2, offset: 0.12, grit: 0.4 },
     reverb: { send: 0.25, type: 'hall', size: 0.6, decay: 2.8, predelay: 0.02, damping: 0.45, hpf: 220, mod: 0.5, width: 1, shimmer: 0.4, diffusion: 0.7 },
     delayToReverb: 0.35,
     duck: { amount: 0.3, release: 0.3 },
@@ -79,7 +80,7 @@ export const LOCK_GROUPS = {
   osc: { label: 'Oscillators', keys: ['osc', 'sub', 'noise', 'drift', 'driftRate'] },
   filter: { label: 'Filters', keys: ['filterA', 'filterB', 'routing', 'follower'] },
   env: { label: 'Envelopes', keys: ['amp', 'fenv', 'pitchEnv', 'gate', 'strum', 'strumDir', 'velocity'] },
-  colour: { label: 'Colour', keys: ['colour', 'transient', 'chorus', 'eq', 'width', 'voiceSpread', 'level'] },
+  colour: { label: 'Colour', keys: ['colour', 'transient', 'chorus', 'eq', 'width', 'voiceSpread', 'level', 'texture'] },
   space: { label: 'Space', keys: ['delay', 'reverb', 'delayToReverb', 'duck', 'sidechain'] },
 };
 
@@ -141,6 +142,7 @@ export function applyMacros(patch, macros) {
   if (g > 0.15 && p.colour.mode === 'off') p.colour.mode = 'tape';
   p.colour.drive = clamp(p.colour.drive + g * 0.5, 0, 1);
   p.filterA.drive = clamp(p.filterA.drive + g * 0.4, 0, 1);
+  p.delay.grit = clamp((p.delay.grit ?? 0.4) + g * 0.3, 0, 1);
 
   p.delay.send = clamp(p.delay.send * Math.pow(2, s * 1.6) + Math.max(0, s) * 0.05, 0, 1);
   p.reverb.send = clamp(p.reverb.send * Math.pow(2, s * 1.6) + Math.max(0, s) * 0.05, 0, 1);
@@ -216,6 +218,8 @@ export const SCHEMA = [
       r('noise.level', 'Noise click', 0, 1, 0.01),
       r('noise.decay', 'Click decay', 0.001, 0.3, 0.001, { unit: 's', scale: 'log' }),
       r('noise.colour', 'Click colour', 0, 1, 0.01),
+      r('noise.air', 'Air noise', 0, 1, 0.01),
+      r('noise.airColour', 'Air colour', 0, 1, 0.01),
       r('drift', 'Analogue drift', 0, 60, 0.5, { unit: 'ct' }),
       r('driftRate', 'Drift rate', 0.05, 8, 0.05, { unit: 'Hz', scale: 'log' }),
     ],
@@ -263,6 +267,15 @@ export const SCHEMA = [
     ],
   },
   {
+    id: 'texture', label: 'Crackle & hiss', lock: 'colour', params: [
+      r('texture.crackle', 'Crackle', 0, 1, 0.01),
+      r('texture.density', 'Crackle density', 0, 1, 0.01),
+      r('texture.tone', 'Crackle tone', 0, 1, 0.01),
+      r('texture.hiss', 'Hiss', 0, 1, 0.01),
+      r('texture.follow', 'Follow the sound', 0, 1, 0.01),
+    ],
+  },
+  {
     id: 'output', label: 'Output', lock: 'colour', params: [
       r('eq.lowCut', 'Low cut', 15, 1500, 1, { unit: 'Hz', scale: 'log' }),
       r('eq.highCut', 'High cut', 1000, 20000, 1, { unit: 'Hz', scale: 'log' }),
@@ -282,6 +295,7 @@ export const SCHEMA = [
       r('delay.hpf', 'Loop HP', 20, 2000, 1, { unit: 'Hz', scale: 'log' }),
       r('delay.sat', 'Loop drive', 0, 1, 0.01),
       r('delay.wow', 'Wow/flutter', 0, 1, 0.01),
+      r('delay.grit', 'Tape grit', 0, 1, 0.01),
       r('delayToReverb', 'Delay → reverb', 0, 1, 0.01),
     ],
   },

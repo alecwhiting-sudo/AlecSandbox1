@@ -104,11 +104,17 @@ export function varyPatch(patch, rng, amount, locks = {}) {
     p.chorus.rate = clamp(p.chorus.rate + rng.bipolar() * v * 0.2, 0, 1);
     p.eq.tilt = clamp(p.eq.tilt + rng.bipolar() * v * 0.15, -1, 1);
     p.voiceSpread = clamp(p.voiceSpread + rng.bipolar() * v * 0.3, 0, 1);
+    if (p.texture) {
+      p.texture.density = clamp(p.texture.density + rng.bipolar() * v * 0.2, 0, 1);
+      p.texture.tone = clamp(p.texture.tone + rng.bipolar() * v * 0.2, 0, 1);
+      if (p.texture.crackle > 0) p.texture.crackle = clamp(p.texture.crackle * vmul(rng, v, 0.5), 0, 1);
+    }
   }
   if (!locks.space) {
     p.reverb.decay = clamp(p.reverb.decay * vmul(rng, v, 0.4), 0.2, 20);
     p.reverb.damping = clamp(p.reverb.damping + rng.bipolar() * v * 0.15, 0, 1);
     p.delay.feedback = clamp(p.delay.feedback + rng.bipolar() * v * 0.1, 0, 0.92);
+    p.delay.grit = clamp((p.delay.grit ?? 0.4) + rng.bipolar() * v * 0.15, 0, 1);
     // Delay times are spread across the kit by delayPlan(), not here.
   }
   return p;

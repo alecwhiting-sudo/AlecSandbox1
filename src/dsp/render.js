@@ -10,6 +10,7 @@ import { createFilter } from './filters.js';
 import { Saturator, TransientShaper, Chorus, OutputEQ } from './colour.js';
 import { StereoDelay } from './delay.js';
 import { Reverb } from './reverb.js';
+import { Texture } from './texture.js';
 
 const CTRL = 16; // control-rate interval in samples
 
@@ -38,6 +39,14 @@ class Voice {
       this.noiseLevel = patch.noise.level;
       this.noiseK = Math.exp(-1 / (Math.max(patch.noise.decay ?? 0.02, 0.001) * sr));
       this.noiseEnv = 1;
+    }
+    // Air: sustained noise through the filter and amp envelope (breath, grit).
+    this.air = null;
+    if (isLowest && patch.noise && (patch.noise.air ?? 0) > 0) {
+      const col = patch.noise.airColour ?? 0.7;
+      this.air = [new Noise(rng.fork('airL'), col), new Noise(rng.fork('airR'), col)];
+      // Scale with the chord so a big chord gets proportionally more air.
+      this.airLevel = patch.noise.air * 0.45 * Math.sqrt(count);
     }
     this.amp = new ADSR(sr, patch.amp, gateSec);
     this.fenv = new ADSR(sr, patch.fenv, gateSec);
@@ -94,6 +103,7 @@ class Voice {
       const s = this.noise.process() * this.noiseLevel * this.noiseEnv;
       this.noiseEnv *= this.noiseK; l += s; r += s;
     }
+    if (this.air) { l += this.air[0].process() * this.airLevel; r += this.air[1].process() * this.airLevel; }
     const p = this.patch;
     let yl, yr;
     if (this.fBOn && p.routing === 'parallel') {
@@ -166,7 +176,8 @@ export function renderStab(patch, notes, opts = {}) {
   const trans = new TransientShaper(sr, patch.transient?.attack ?? 0, patch.transient?.sustain ?? 0);
   const chorus = new Chorus(sr, patch.chorus);
   const eq = new OutputEQ(sr, patch.eq);
-  const delay = hasDelay ? new StereoDelay(sr, bpm, patch.delay) : null;
+  const delay = hasDelay ? new StereoDelay(sr, bpm, patch.delay, rng.fork('delay')) : null;
+  const texture = new Texture(sr, rng.fork('texture'), patch.texture ?? {});
   const reverb = hasVerb ? new Reverb(sr, patch.reverb) : null;
   const duckF = new EnvelopeFollower(sr, 0.005, patch.duck?.release ?? 0.25);
   const duckAmt = clamp(patch.duck?.amount ?? 0, 0, 1);
@@ -227,9 +238,15 @@ export function renderStab(patch, notes, opts = {}) {
         const g = 1 - scAmt * scv;
         l *= g; r *= g; wl *= g; wr *= g;
       }
-      dryL[i] = l; dryR[i] = r; wetL[i] = wl; wetR[i] = wr;
       const a = Math.max(Math.abs(l + wl), Math.abs(r + wr));
       if (a > blockPeak) blockPeak = a;
+      // Crackle and hiss ride on the dry stem. They are left out of the
+      // silence check so the file still ends when the stab and tail end.
+      if (texture.active) {
+        texture.process((Math.abs(l + wl) + Math.abs(r + wr)) * 0.5);
+        l += texture.l; r += texture.r;
+      }
+      dryL[i] = l; dryR[i] = r; wetL[i] = wl; wetR[i] = wr;
     }
     if (blockPeak > peak) peak = blockPeak;
     // After the dry part, stop once the tail is ~80 dB below the peak.

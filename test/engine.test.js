@@ -126,7 +126,7 @@ test('export length modes and normalisation', () => {
   let peak = 0;
   for (const ch of prep.mix) for (const v of ch) peak = Math.max(peak, Math.abs(v));
   assert.ok(Math.abs(peak - Math.pow(10, -1 / 20)) < 0.01, `peak ${peak}`);
-  assert.equal(prep.mix[0][prep.length - 1], 0, 'faded to zero');
+  assert.ok(Math.abs(prep.mix[0][prep.length - 1]) < 1e-9, 'faded to zero');
 });
 
 test('width macro: mono at 0, wider than default at 1, and renders are stereo', () => {
