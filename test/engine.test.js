@@ -1,0 +1,130 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { renderStab } from '../src/dsp/render.js';
+import { defaultKitSettings, generateKit, applyTail, mutateStab } from '../src/engine/variation.js';
+import { PRESETS, presetPatch } from '../src/engine/presets.js';
+import { applyMacros, defaultMacros, SCHEMA, getPath, defaultPatch } from '../src/engine/patch.js';
+import { encodeWav, makeZip, prepareStab, finalLength, defaultExportSettings, normaliseGains } from '../src/engine/export.js';
+
+const SR = 24000; // lower rate keeps tests quick
+
+test('every preset renders finite, non-silent, unclipped audio', () => {
+  for (const p of PRESETS) {
+    const r = renderStab(presetPatch(p.id), [57, 60, 64, 67], { sr: SR, bpm: 124, seed: 1, maxTail: 6 });
+    let peak = 0;
+    for (const ch of [...r.dry, ...r.wet]) for (const v of ch) { assert.ok(Number.isFinite(v), p.id); peak = Math.max(peak, Math.abs(v)); }
+    assert.ok(peak > 0.02, `${p.id} too quiet (${peak})`);
+    assert.ok(peak < 2.5, `${p.id} too hot (${peak})`);
+  }
+});
+
+test('rendering is deterministic for a seed', () => {
+  const p = presetPatch('dub-chord');
+  const a = renderStab(p, [57, 60, 64], { sr: SR, seed: 42, maxTail: 2 });
+  const b = renderStab(p, [57, 60, 64], { sr: SR, seed: 42, maxTail: 2 });
+  assert.deepEqual(Array.from(a.dry[0].slice(0, 2000)), Array.from(b.dry[0].slice(0, 2000)));
+});
+
+test('tails extend beyond the dry part and stop when silent', () => {
+  const p = presetPatch('dub-chord');
+  const r = renderStab(p, [57, 60, 64], { sr: SR, seed: 1, maxTail: 20 });
+  assert.ok(r.length > r.dryLength + SR, 'tail is at least a second');
+  assert.ok(r.length < r.dryLength + 20 * SR, 'stopped before the cap');
+  const dry = applyTail(p, 0);
+  const rd = renderStab(dry, [57, 60, 64], { sr: SR, seed: 1 });
+  assert.ok(rd.length < r.length);
+});
+
+test('kit generation is deterministic, sized and varied', () => {
+  const s = { ...defaultKitSettings(), size: 8 };
+  const a = generateKit(s), b = generateKit(s);
+  assert.equal(a.length, 8);
+  assert.deepEqual(a.map((x) => x.patch), b.map((x) => x.patch));
+  const cutoffs = new Set(a.map((x) => Math.round(x.patch.filterA.cutoff)));
+  assert.ok(cutoffs.size > 4, 'cutoff varies across the kit');
+  const tails = new Set(a.map((x) => x.info.tailLabel));
+  assert.ok(tails.size >= 3, 'tail lengths vary');
+});
+
+test('locks keep groups identical across the kit', () => {
+  const s = { ...defaultKitSettings(), size: 6, variation: 1, familySpread: 1, locks: { filter: true, chord: true } };
+  const kit = generateKit(s);
+  const f0 = JSON.stringify(kit[0].patch.filterA);
+  for (const st of kit) {
+    assert.equal(JSON.stringify(st.patch.filterA), f0);
+    assert.deepEqual(st.chord.notes, kit[0].chord.notes);
+  }
+});
+
+test('re-rolling one pad keeps the others', () => {
+  const s = { ...defaultKitSettings(), size: 4 };
+  const kit = generateKit(s);
+  const s2 = { ...s, stabSeeds: { 2: 1 } };
+  const kit2 = generateKit(s2, kit);
+  assert.equal(kit2[0], kit[0]);
+  assert.equal(kit2[3], kit[3]);
+  assert.notEqual(kit2[2].seed, kit[2].seed);
+  const m = mutateStab(kit[1], s, 1);
+  assert.notEqual(m.seed, kit[1].seed);
+});
+
+test('macros move parameters in the expected direction', () => {
+  const p = defaultPatch();
+  const bright = applyMacros(p, { ...defaultMacros(), bright: 1 });
+  const dark = applyMacros(p, { ...defaultMacros(), bright: 0 });
+  assert.ok(bright.filterA.cutoff > p.filterA.cutoff && dark.filterA.cutoff < p.filterA.cutoff);
+  const wet = applyMacros(p, { ...defaultMacros(), space: 1 });
+  assert.ok(wet.reverb.send > p.reverb.send && wet.reverb.decay > p.reverb.decay);
+});
+
+test('schema paths all exist on the default patch', () => {
+  const p = defaultPatch();
+  for (const sec of SCHEMA) for (const prm of sec.params) assert.notEqual(getPath(p, prm.path), undefined, prm.path);
+});
+
+test('WAV header and length are correct', () => {
+  const n = 1000;
+  const w = encodeWav([new Float32Array(n), new Float32Array(n)], 48000, 24);
+  const v = new DataView(w.buffer);
+  assert.equal(String.fromCharCode(...w.slice(0, 4)), 'RIFF');
+  assert.equal(v.getUint32(24, true), 48000);
+  assert.equal(v.getUint16(34, true), 24);
+  assert.equal(v.getUint32(40, true), n * 2 * 3);
+  assert.equal(w.length, 44 + n * 6);
+});
+
+test('ZIP archive is valid', (t) => {
+  const zip = makeZip([
+    { name: 'a.wav', data: encodeWav([new Float32Array(10)], 48000, 16) },
+    { name: 'stems/b.txt', data: new TextEncoder().encode('hello') },
+  ]);
+  const dir = mkdtempSync(join(tmpdir(), 'stabzip-'));
+  const file = join(dir, 'k.zip');
+  writeFileSync(file, zip);
+  try {
+    const out = execFileSync('unzip', ['-t', file]).toString();
+    assert.match(out, /No errors detected/);
+  } catch (e) {
+    if (e.code === 'ENOENT') t.skip('unzip not installed'); else throw e;
+  }
+});
+
+test('export length modes and normalisation', () => {
+  const r = renderStab(presetPatch('dub-chord'), [57, 60, 64], { sr: SR, bpm: 120, seed: 3, maxTail: 10 });
+  const ex = defaultExportSettings();
+  const auto = finalLength(r, ex, 120);
+  const snap = finalLength(r, { ...ex, lengthMode: 'snap' }, 120);
+  const beat = SR * 0.5;
+  assert.ok(snap >= auto && snap % beat === 0);
+  assert.equal(finalLength(r, { ...ex, lengthMode: 'fixed', fixedBars: 1 }, 120), SR * 2);
+  const [g] = normaliseGains([r], ex);
+  const prep = prepareStab(r, ex, 120, g);
+  let peak = 0;
+  for (const ch of prep.mix) for (const v of ch) peak = Math.max(peak, Math.abs(v));
+  assert.ok(Math.abs(peak - Math.pow(10, -1 / 20)) < 0.01, `peak ${peak}`);
+  assert.equal(prep.mix[0][prep.length - 1], 0, 'faded to zero');
+});

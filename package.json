@@ -1,0 +1,16 @@
+{
+  "name": "stab-lab",
+  "version": "0.1.0",
+  "description": "Generate kits of synth stabs with envelopes, filters, subtle variation and reverb/delay tails.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs",
+    "render": "node scripts/render-kit.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}
