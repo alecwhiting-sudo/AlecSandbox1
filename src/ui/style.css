@@ -57,6 +57,7 @@ button, select, input { font: inherit; color: inherit; }
 .status { font-size: 12px; color: var(--muted); min-width: 0; }
 
 .btn {
+  white-space: nowrap;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
   padding: 8px 14px; cursor: pointer; transition: border-color .15s, background .15s;
 }
@@ -71,7 +72,7 @@ button, select, input { font: inherit; color: inherit; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; }
 .panel > h2 { margin-bottom: 12px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-.row { display: flex; align-items: center; }
+.row { display: flex; align-items: center; flex-wrap: wrap; }
 .gap { gap: 8px; margin-top: 10px; }
 .panel-head .gap { margin-top: 0; }
 
@@ -89,6 +90,17 @@ button, select, input { font: inherit; color: inherit; }
 }
 .menu button { text-align: left; background: transparent; border: 0; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
 .menu button:hover, .menu button:focus-visible { background: var(--panel-2); }
+
+.ref-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; color: var(--accent-2); }
+.drop-overlay { display: none; }
+body.dropping .drop-overlay {
+  display: grid; place-items: center; position: fixed; inset: 0; z-index: 50; pointer-events: none;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.drop-overlay div {
+  border: 2px dashed var(--accent); border-radius: 14px; padding: 28px 36px; font-size: 18px; font-weight: 650;
+  background: var(--panel); color: var(--text);
+}
 
 /* controls */
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }

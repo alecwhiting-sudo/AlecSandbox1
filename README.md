@@ -35,6 +35,9 @@ dev server.
 | Colour | Tape, tube, wavefolder, hard clip and bitcrush saturation; transient shaper; Juno-style chorus or ensemble; output EQ and width. |
 | Space | Tempo-synced stereo, ping-pong and tape delay, with filtering and saturation in the feedback loop. Room, chamber, plate, hall, shimmer and spring reverbs, with pre-delay, damping and a tail high-pass. |
 | Chords | 40 chord types from triads to clusters, polychords and "petrushka". Voicings, inversions and doublings. Clickable keyboard for any custom chord. Random chords and mutation, both steered by a Dissonance control. Modes: fixed chord, diatonic progression, random, or mutate chain. |
+| Copy notes | Drop any stab (WAV, AIFF, MP3…) on the page, or use "Copy notes from audio…", and its approximate notes become the chord. It uses harmonic-salience note detection. On our own presets it gets every note exactly right about 80% of the time, and is usually one tension note off otherwise. Bells and heavily filtered sounds are rougher. |
+| Stereo | Every render is stereo. A Width macro runs from mono to extra wide, and a quick delay strip offers ping-pong, stereo or tape delay (or off), with time, amount and feedback. |
+| Ableton folder | "Link Ableton folder" (Chrome/Edge) writes the current kit as WAVs into a folder and keeps it updated. Add that folder to Live's browser under Places and drag the stabs in from there. The pad ⬇ button saves keepers to a separate folder. |
 | Kit variation | Seeded and reproducible. Variation amount, family spread (borrows parts of neighbouring presets) and tail spread (dry to huge across the pads). Per-pad re-roll, mutate and hold. Locks per group. |
 | Export | Tail length until silent, snapped to the beat, or fixed bars. Normalise per kit or per stab. 16/24/32-bit WAV at 44.1 or 48 kHz. WAV files only: the mix and/or dry and tail stems. Chrome/Edge write them into a folder you choose (with `kit.json`); other browsers download them one by one. Drag a pad into a DAW (Chrome/Edge). The claude.ai artifact preview cannot save WAVs, so use `dist/index.html` to export. |
 
@@ -42,7 +45,7 @@ dev server.
 
 ```
 src/dsp/      oscillators, envelopes, filters, colour, delay, reverb, render (pure JS, no Web Audio)
-src/music/    theory (scales, chord vocabulary, naming) and chords (voicing, random, mutate)
+src/music/    theory (scales, chord vocabulary, naming), chords (voicing, random, mutate), detect (notes from audio)
 src/engine/   patch model + schema + macros, presets, kit variation, export (WAV)
 src/ui/       the web app
 src/worker.js renders stabs off the main thread

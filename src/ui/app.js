@@ -10,6 +10,7 @@ import { defaultExportSettings, prepareStab, normaliseGains, stabFiles, stabFile
 import { Rng } from '../dsp/rng.js';
 import { renderStab } from '../dsp/render.js';
 import { FolderLink, CURRENT_DIR, KEPT_DIR } from './folderlink.js';
+import { detectNotes, toMono } from '../music/detect.js';
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, attrs = {}, ...kids) => {
@@ -367,15 +368,18 @@ function buildChordPanel() {
       el('button', { class: 'btn small', onclick: () => {
         const r = new Rng(Date.now());
         const c = randomChord(r, { key: s.key, scale: s.scale, dissonance: s.dissonance, centre: s.chord.centre });
-        s.customNotes = c.notes; chordChanged(true);
+        s.customNotes = c.notes; state.reference = null; chordChanged(true);
       } }, 'Random chord'),
       el('button', { class: 'btn small', onclick: () => {
         const r = new Rng(Date.now());
         const c = mutateChord(r, baseChordFor(s), { strength: Math.max(0.3, s.mutation), dissonance: s.dissonance, key: s.key, scale: s.scale });
-        s.customNotes = c.notes; chordChanged(true);
+        s.customNotes = c.notes; state.reference = null; chordChanged(true);
       } }, 'Mutate chord'),
-      s.customNotes ? el('button', { class: 'btn small', onclick: () => { s.customNotes = null; chordChanged(true); } }, 'Back to builder') : null,
+      s.customNotes ? el('button', { class: 'btn small', onclick: () => { s.customNotes = null; state.reference = null; chordChanged(true); } }, 'Back to builder') : null,
+      el('label', { class: 'btn small file-btn', title: 'Or drop an audio file anywhere on the page' }, 'Copy notes from audio…',
+        el('input', { type: 'file', accept: 'audio/*', hidden: true, onchange: (e) => { copyNotesFrom(e.target.files[0]); e.target.value = ''; } })),
     ),
+    referenceLine(),
     builder,
     el('div', { class: 'ctl wide', style: 'margin-top:10px' }, el('span', { class: 'lbl' }, 'Notes — click keys to build any chord, however crazy'), keyboard(base.notes)),
     el('div', { class: 'grid2', style: 'margin-top:10px' },
@@ -385,6 +389,67 @@ function buildChordPanel() {
     ),
   );
 }
+
+// ---------------------------------------------------------------- copy notes from a dropped stab
+function referenceLine() {
+  const ref = state.reference;
+  if (!ref || !state.settings.customNotes) return null;
+  const conf = ref.confidence > 0.6 ? 'clear' : ref.confidence > 0.3 ? 'fair' : 'rough guess';
+  return el('div', { class: 'ref-line' },
+    el('span', {}, `Copied from ${ref.name} (${conf})`),
+    el('button', { class: 'btn small', onclick: playReference }, '▶ Original'),
+    el('button', { class: 'btn small', onclick: () => { if (state.stabs[0]) { select(0); play(0); } } }, '▶ Pad 1'));
+}
+
+async function copyNotesFrom(file) {
+  if (!file) return;
+  if (!/^audio\//.test(file.type) && !/\.(wav|aiff?|mp3|m4a|flac|ogg|caf)$/i.test(file.name)) {
+    $('#status').textContent = `${file.name} isn't an audio file`;
+    return;
+  }
+  $('#status').textContent = `Listening to ${file.name}…`;
+  try {
+    const sr = 44100;
+    const decoded = await new OfflineAudioContext(1, 1, sr).decodeAudioData(await file.arrayBuffer());
+    const chs = [];
+    for (let c = 0; c < decoded.numberOfChannels; c++) chs.push(decoded.getChannelData(c).slice(0, sr * 8));
+    const result = detectNotes(toMono(chs), decoded.sampleRate);
+    if (!result.notes.length) { $('#status').textContent = `Couldn't hear clear notes in ${file.name}`; return; }
+    state.reference = { name: file.name, channels: chs, sr: decoded.sampleRate, confidence: result.confidence };
+    state.settings.customNotes = result.notes;
+    $('#status').textContent = `${file.name}: ${result.name} (${result.notes.map(noteName).join(' ')})`;
+    chordChanged(true);
+  } catch (err) {
+    $('#status').textContent = `Couldn't read ${file.name} (${err.message})`;
+  }
+}
+
+function playReference() {
+  const ref = state.reference;
+  if (!ref) return;
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  const buf = actx.createBuffer(Math.min(2, ref.channels.length), ref.channels[0].length, ref.sr);
+  for (let c = 0; c < buf.numberOfChannels; c++) buf.copyToChannel(ref.channels[c], c);
+  if (current) { try { current.s.stop(); } catch { /* already stopped */ } }
+  const src = actx.createBufferSource(); src.buffer = buf;
+  const g = actx.createGain(); src.connect(g).connect(actx.destination); src.start();
+  current = { s: src, g };
+}
+
+// Drop an audio file anywhere to copy its notes.
+let dragDepth = 0;
+const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; dragDepth++; document.body.classList.add('dropping'); });
+window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dropping'); } });
+window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0; document.body.classList.remove('dropping');
+  const f = [...e.dataTransfer.files].find((x) => /^audio\//.test(x.type) || /\.(wav|aiff?|mp3|m4a|flac|ogg|caf)$/i.test(x.name));
+  if (f) copyNotesFrom(f); else $('#status').textContent = 'Drop an audio file (WAV, AIFF, MP3…) to copy its notes';
+});
 
 function chordChanged(rebuild = false) {
   if (rebuild) buildChordPanel(); else updateChordDisplay(true);
@@ -424,6 +489,7 @@ function keyboard(active) {
     const cur = new Set(baseChordFor(s).notes);
     if (cur.has(m)) { if (cur.size > 1) cur.delete(m); } else cur.add(m);
     s.customNotes = [...cur].sort((a, b) => a - b);
+    state.reference = null;
     chordChanged(true);
   };
   whites.forEach((m, i) => {
