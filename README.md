@@ -1,10 +1,14 @@
-# Stab Lab
+# Stab Lab by RatMode
 
-Stab Lab generates **kits of synth stabs** for electronic music. You pick a
-character (analogue to digital), a key and a tempo. It builds 4–16 related
-stabs with subtle tone and timbre variation, different chords, and different
-reverb/delay tails. You can audition them, chop the tails, and export WAVs:
-the full mix, or dry and tail stems you can chop or let ring out.
+Stab Lab generates **kits of synth stabs** for electronic music. It's part of
+the [RatMode](https://www.divurj.com/ratmode) family and uses RatMode's look:
+flat greys, one acid-orange accent, and recessed knobs drawn like RatMode's
+own knob painter (`Source/UI/UIConstants.h` in the RatMode repo).
+
+You pick a character (analogue to digital), a key and a tempo. It builds 4–16
+related stabs with subtle tone and timbre variation, different chords, and
+different reverb/delay tails. You can audition them, chop the tails, and
+export WAVs: the full mix, or dry and tail stems you can chop or let ring out.
 
 ## Use it
 
@@ -33,8 +37,9 @@ dev server.
 | Envelope followers | Each voice's own loudness drives filter cutoff. A follower on the dry stab ducks the reverb/delay tails. A sidechain from an internal kick pump or an uploaded audio file ducks the stab and/or moves the cutoff. |
 | Filters (two slots, serial or parallel) | ZDF ladder, diode (acid), Cytomic SVF LP/HP/BP/notch at 12/24 dB, formant (vowel morph), positive/negative comb. Each has drive, key tracking, velocity and envelope amount. |
 | Colour | Tape, tube, wavefolder, hard clip and bitcrush saturation; transient shaper; Juno-style chorus or ensemble; output EQ and width. |
-| Space | Tempo-synced stereo, ping-pong and tape delay, with filtering and saturation in the feedback loop. Room, chamber, plate, hall, shimmer and spring reverbs, with pre-delay, damping and a tail high-pass. |
+| Space | Tempo-synced stereo, ping-pong and tape delay, with filtering and saturation in the feedback loop. Tape mode models a worn tape echo, scaled by Grit: biased tanh record saturation, a 110 Hz head bump, darkening gap loss, signal-riding hiss, wow, random wander, flutter, scrape flutter and dropouts. It is gain-normalised so high feedback never runs away. Room, chamber, plate, hall, shimmer and spring reverbs, with pre-delay, damping and a tail high-pass. |
 | Chords | 40 chord types from triads to clusters, polychords and "petrushka". Voicings, inversions and doublings. Clickable keyboard for any custom chord. Random chords and mutation, both steered by a Dissonance control. Modes: fixed chord, diatonic progression, random, or mutate chain. |
+| Texture | Vinyl-style crackle (density and tone, with occasional deeper pops) and tape hiss, laid on the dry stem at a level relative to the stab. It can follow the sound so it swells and fades with the stab and its tail. Air noise adds breath inside the voice, shaped by the filter and amp envelope. |
 | Copy notes | Drop any stab (WAV, AIFF, MP3…) on the page, or use "Copy notes from audio…", and its approximate notes become the chord. It uses harmonic-salience note detection. On our own presets it gets every note exactly right about 80% of the time, and is usually one tension note off otherwise. Bells and heavily filtered sounds are rougher. |
 | Stereo | Every render is stereo. A Width macro runs from mono to extra wide, and a quick delay strip offers ping-pong, stereo or tape delay (or off), with time, amount and feedback. |
 | Ableton folder | "Link Ableton folder" (Chrome/Edge) writes the current kit as WAVs into a folder and keeps it updated. Add that folder to Live's browser under Places and drag the stabs in from there. The pad ⬇ button saves keepers to a separate folder. |

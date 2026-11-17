@@ -213,7 +213,10 @@ function rangeInput({ label, min, max, step, scale, unit }, value, onChange, cls
     type: 'range', min: log ? 0 : min, max: log ? 1000 : max, step: log ? 1 : step, value: toSlider(value),
     'aria-label': label,
   });
+  const fill = () => input.style.setProperty('--pct', `${((input.value - input.min) / (input.max - input.min)) * 100}%`);
+  fill();
   input.addEventListener('input', () => {
+    fill();
     const v = fromSlider(input.value);
     val.textContent = fmt(v, unit, step);
     onChange(v);
@@ -221,12 +224,19 @@ function rangeInput({ label, min, max, step, scale, unit }, value, onChange, cls
   return el('div', { class: `ctl ${cls}` }, el('label', {}, el('span', {}, label), val), input);
 }
 
-// Rotary knob for macros.
+// Rotary knob for macros, drawn like RatMode's KnobPainter (UIConstants.h):
+// recessed dark well, dim track ring, orange value arc, white pointer dot.
+// 300 degree sweep starting at 7 o'clock. Macros are bipolar (0.5 = no
+// change), so the arc grows out from a 12 o'clock centre tick.
 function knob({ label, hint }, value, onChange) {
-  const R = 24, C = 32, START = 135, SWEEP = 270;
-  const polar = (deg, r) => [C + r * Math.cos((deg * Math.PI) / 180), C + r * Math.sin((deg * Math.PI) / 180)];
+  const C = 32, R_ARC = 27, R_WELL = 26, START = 210, SWEEP = 300;
+  // Angles are clockwise from 12 o'clock, as in RatMode.
+  const pt = (deg, r) => {
+    const a = (deg * Math.PI) / 180;
+    return [C + r * Math.sin(a), C - r * Math.cos(a)];
+  };
   const arcPath = (a0, a1, r) => {
-    const [x0, y0] = polar(a0, r), [x1, y1] = polar(a1, r);
+    const [x0, y0] = pt(a0, r), [x1, y1] = pt(a1, r);
     return `M ${x0} ${y0} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}`;
   };
   const ns = 'http://www.w3.org/2000/svg';
@@ -237,18 +247,22 @@ function knob({ label, hint }, value, onChange) {
   svg.setAttribute('aria-label', label);
   svg.setAttribute('aria-valuemin', '0'); svg.setAttribute('aria-valuemax', '100');
   const mk = (tag, attrs) => { const n = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); svg.append(n); return n; };
-  mk('path', { d: arcPath(START, START + SWEEP, R), class: 'track', fill: 'none', 'stroke-width': 5, 'stroke-linecap': 'round' });
-  const arc = mk('path', { class: 'arc', fill: 'none', 'stroke-width': 5, 'stroke-linecap': 'round' });
-  const dot = mk('circle', { r: 3.2, class: 'dot' });
+  mk('circle', { cx: C, cy: C, r: R_WELL, class: 'well', 'stroke-width': 2 });
+  mk('path', { d: arcPath(START, START + SWEEP, R_ARC), class: 'track', fill: 'none', 'stroke-width': 2.4 });
+  const arc = mk('path', { class: 'arc', fill: 'none', 'stroke-width': 4, 'stroke-linecap': 'round' });
+  const centre = START + SWEEP / 2;
+  const [tx0, ty0] = pt(centre, R_ARC - 4), [tx1, ty1] = pt(centre, R_ARC + 4);
+  mk('line', { x1: tx0, y1: ty0, x2: tx1, y2: ty1, class: 'detent', 'stroke-width': 3 });
+  const dot = mk('circle', { r: 3, class: 'dot' });
   const valEl = el('span', { class: 'k-val' });
   let v = value;
   const draw = () => {
-    const a = START + SWEEP * v;
-    arc.setAttribute('d', v > 0.003 ? arcPath(START, a, R) : '');
-    const [x, y] = polar(a, R - 9);
+    const ang = START + SWEEP * v;
+    arc.setAttribute('d', Math.abs(v - 0.5) > 0.003 ? arcPath(Math.min(centre, ang), Math.max(centre, ang), R_ARC) : '');
+    const [x, y] = pt(ang, R_ARC);
     dot.setAttribute('cx', x); dot.setAttribute('cy', y);
     const pct = Math.round((v - 0.5) * 200);
-    valEl.textContent = pct === 0 ? '·' : (pct > 0 ? '+' : '') + pct;
+    valEl.textContent = pct === 0 ? '0' : (pct > 0 ? '+' : '') + pct;
     svg.setAttribute('aria-valuenow', String(Math.round(v * 100)));
   };
   const set = (nv) => { v = Math.min(1, Math.max(0, nv)); draw(); onChange(v); };
@@ -318,7 +332,7 @@ function loadPreset(id) {
   const pr = PRESET_BY_ID[id];
   if (pr?.chord && !s.customNotes) Object.assign(s.chord, pr.chord);
   $('#preset-title').textContent = pr?.name ?? 'Character';
-  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip();
+  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip();
   regenerate({ audition: true });
 }
 
@@ -380,7 +394,7 @@ function buildChordPanel() {
       el('label', { class: 'btn small file-btn', title: 'Or drop an audio file anywhere on the page' }, 'Copy notes from audio…',
         el('input', { type: 'file', accept: 'audio/*', hidden: true, onchange: (e) => { copyNotesFrom(e.target.files[0]); e.target.value = ''; } })),
     ),
-    referenceLine(),
+    ...[referenceLine()].filter(Boolean),
     builder,
     el('div', { class: 'ctl wide', style: 'margin-top:10px' }, el('span', { class: 'lbl' }, 'Notes — click keys to build any chord, however crazy'), keyboard(base.notes)),
     el('div', { class: 'grid2', style: 'margin-top:10px' },
@@ -541,6 +555,7 @@ function buildMacros() {
     state.settings.macros[m.id] = v; regenerate({ audition: true });
   })));
   buildDelayStrip();
+  buildTextureStrip();
 }
 
 // Quick delay controls next to the macros (edit the base sound).
@@ -565,6 +580,29 @@ function buildDelayStrip() {
     el('div', { class: 'strip-ctl wide' }, rangeInput({ label: 'Feedback', min: 0, max: 0.95, step: 0.01 }, d.feedback, (v) => {
       const p = editablePatch(); p.delay.feedback = v; markEdited(); regenerate({ audition: true });
     })),
+    el('div', { class: 'strip-ctl wide', title: 'Tape mode: saturation, head bump, hiss, wow and dropouts. Other modes: loop drive.' },
+      rangeInput({ label: d.mode === 'tape' ? 'Tape grit' : 'Grit', min: 0, max: 1, step: 0.01 }, d.grit ?? 0.4, (v) => {
+        const p = editablePatch(); p.delay.grit = v; markEdited(); regenerate({ audition: true });
+      })),
+  );
+}
+
+// Crackle, hiss and air noise, next to the macros.
+function buildTextureStrip() {
+  const root = $('#texture-strip');
+  if (!root) return;
+  const base = currentBase();
+  const t = base.texture ?? {};
+  const ctl = (label, path, value, hint) => el('div', { class: 'strip-ctl wide', title: hint },
+    rangeInput({ label, min: 0, max: 1, step: 0.01 }, value ?? 0, (v) => {
+      setPath(editablePatch(), path, v); markEdited(); regenerate({ audition: true });
+    }));
+  root.replaceChildren(
+    el('span', { class: 'lbl' }, 'Texture'),
+    ctl('Crackle', 'texture.crackle', t.crackle, 'Vinyl-style clicks and pops'),
+    ctl('Density', 'texture.density', t.density, 'How often the crackle clicks'),
+    ctl('Hiss', 'texture.hiss', t.hiss, 'Tape hiss'),
+    ctl('Air', 'noise.air', base.noise?.air, 'Breathy noise inside the sound, shaped by the filter and envelope'),
   );
 }
 
@@ -597,6 +635,7 @@ function buildSoundPanel() {
         markEdited();
         if (prm.path.endsWith('.type') && sec.id.startsWith('osc')) buildSoundPanel();
         if (prm.path.startsWith('delay.')) buildDelayStrip();
+        if (prm.path.startsWith('texture.') || prm.path === 'noise.air') buildTextureStrip();
         regenerate({ audition: true });
       };
       if (prm.kind === 'range') grid.append(rangeInput(prm, value, onChange));
