@@ -6,7 +6,7 @@ import { PRESETS, PRESET_BY_ID, presetPatch } from '../engine/presets.js';
 import { defaultKitSettings, generateKit, mutateStab, baseChordFor, CHORD_MODES, settingsKey } from '../engine/variation.js';
 import { CHORD_TYPES, NOTE_NAMES, SCALES, noteName } from '../music/theory.js';
 import { randomChord, mutateChord, VOICINGS, PROGRESSIONS } from '../music/chords.js';
-import { defaultExportSettings, prepareStab, normaliseGains, stabFiles, stabFileBase, kitFolderName, encodeWav, makeZip, finalLength } from '../engine/export.js';
+import { defaultExportSettings, prepareStab, normaliseGains, stabFiles, stabFileBase, kitFolderName, encodeWav, finalLength } from '../engine/export.js';
 import { Rng } from '../dsp/rng.js';
 import { renderStab } from '../dsp/render.js';
 
@@ -767,29 +767,41 @@ document.addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------- export
 const kitMeta = () => ({ ...state.settings, presetName: PRESET_BY_ID[state.settings.presetId]?.name ?? 'stab' });
 
-// Inside a claude.ai artifact, files must go through the downloads capability
-// (which accepts .zip/.json but not .wav, so single WAVs are zipped there).
+// Inside a claude.ai artifact, files can only be saved through the downloads
+// capability, whose allowlist does not include .wav. We never fall back to ZIP:
+// the artifact explains that WAVs need the standalone page instead.
 const inArtifact = !!(window.claude && typeof window.claude.use === 'function');
 const downloadsCap = inArtifact ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+const NO_WAV_MSG = 'This claude.ai preview can\'t save WAV files. Open the standalone Stab Lab (dist/index.html) to save WAVs.';
+
+function showNotice(text) {
+  let n = $('#notice');
+  if (!n) {
+    n = el('div', { id: 'notice', class: 'notice', role: 'status' });
+    $('.main').prepend(n);
+  }
+  n.textContent = text;
+}
 
 async function downloadBlob(data, name, type) {
   if (inArtifact) {
     const d = await downloadsCap;
-    if (!d) { $('#status').textContent = 'Saving files is not available in this view'; return; }
-    let filename = name, payload = data;
-    if (name.endsWith('.wav')) { payload = makeZip([{ name, data }]); filename = name.replace(/\.wav$/, '.zip'); }
+    if (!d) { showNotice(NO_WAV_MSG); return false; }
     try {
-      await d.save({ filename, data: new Blob([payload]) });
-      $('#status').textContent = `Saved ${filename}`;
+      await d.save({ filename: name, data: new Blob([data]) });
+      $('#status').textContent = `Saved ${name}`;
+      return true;
     } catch (err) {
-      if (err?.code !== 'declined') $('#status').textContent = `Could not save ${filename} (${err?.code ?? 'error'})`;
+      if (err?.code === 'rejected_extension' || err?.code === 'extension_not_enabled') showNotice(NO_WAV_MSG);
+      else if (err?.code !== 'declined') $('#status').textContent = `Could not save ${name} (${err?.code ?? 'error'})`;
+      return false;
     }
-    return;
   }
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = el('a', { href: url, download: name });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return true;
 }
 
 function padWav(i) {
@@ -826,8 +838,21 @@ function onDragStart(e, i) {
   e.dataTransfer.effectAllowed = 'copy';
 }
 
+// Export every stab as individual WAV files.
+// Chrome/Edge: write straight into a folder the user picks (with a stems/ subfolder).
+// Other browsers: download the WAVs one after another.
 $('#btn-export').addEventListener('click', async () => {
+  if (inArtifact) { showNotice(NO_WAV_MSG); return; }
   const btn = $('#btn-export');
+  let dir = null;
+  if (window.showDirectoryPicker) {
+    try {
+      dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'stablab-export' });
+    } catch (err) {
+      if (err?.name === 'AbortError') return; // user cancelled the folder picker
+      dir = null;
+    }
+  }
   btn.disabled = true;
   $('#status').textContent = 'Preparing export…';
   await allRendered();
@@ -836,18 +861,38 @@ $('#btn-export').addEventListener('click', async () => {
   const files = [];
   state.stabs.forEach((st, i) => {
     const p = prepared(i);
-    if (!p) return;
-    for (const f of stabFiles(p, stabFileBase(st, kit), state.ex)) files.push({ name: `${folder}/${f.name}`, data: f.data });
+    if (p) files.push(...stabFiles(p, stabFileBase(st, kit), state.ex));
   });
-  const manifest = {
-    app: 'Stab Lab', version: 1, created: new Date().toISOString(),
-    settings: state.settings, export: state.ex,
-    stabs: state.stabs.map((s) => ({ index: s.index + 1, chord: s.chord.name, notes: s.chord.notes.map(noteName), tail: s.info?.tailLabel })),
-  };
-  files.push({ name: `${folder}/kit.json`, data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
-  await downloadBlob(makeZip(files), `${folder}.zip`, 'application/zip');
+  try {
+    if (dir) {
+      const kitDir = await dir.getDirectoryHandle(folder, { create: true });
+      const manifest = {
+        app: 'Stab Lab', version: 1, created: new Date().toISOString(),
+        settings: state.settings, export: state.ex,
+        stabs: state.stabs.map((s) => ({ index: s.index + 1, chord: s.chord.name, notes: s.chord.notes.map(noteName), tail: s.info?.tailLabel })),
+      };
+      files.push({ name: 'kit.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
+      for (const [n, f] of files.entries()) {
+        const parts = f.name.split('/');
+        let d = kitDir;
+        for (const part of parts.slice(0, -1)) d = await d.getDirectoryHandle(part, { create: true });
+        const w = await (await d.getFileHandle(parts.at(-1), { create: true })).createWritable();
+        await w.write(f.data); await w.close();
+        $('#status').textContent = `Writing ${n + 1}/${files.length}…`;
+      }
+      $('#status').textContent = `Saved ${state.stabs.length} stabs to ${folder}/`;
+    } else {
+      for (const [n, f] of files.entries()) {
+        await downloadBlob(f.data, f.name.split('/').at(-1), 'audio/wav');
+        $('#status').textContent = `Downloading ${n + 1}/${files.length}…`;
+        await new Promise((r) => setTimeout(r, 250)); // browsers drop rapid-fire downloads
+      }
+      $('#status').textContent = `Downloaded ${files.length} WAV files`;
+    }
+  } catch (err) {
+    $('#status').textContent = `Export failed (${err.message})`;
+  }
   btn.disabled = false;
-  $('#status').textContent = `Exported ${state.stabs.length} stabs`;
 });
 
 // Save / load kit files (settings + mutated/held pads + chops).
@@ -894,6 +939,7 @@ window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer
 
 restore();
 buildAll();
+if (inArtifact) showNotice(NO_WAV_MSG);
 autoAudition = false;
 regenerate({ immediate: true });
 setTimeout(() => { autoAudition = true; }, 0);

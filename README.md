@@ -31,14 +31,14 @@ dev server.
 | Space | Tempo-synced stereo, ping-pong and tape delay, with filtering and saturation in the feedback loop. Room, chamber, plate, hall, shimmer and spring reverbs, with pre-delay, damping and a tail high-pass. |
 | Chords | 40 chord types from triads to clusters, polychords and "petrushka". Voicings, inversions and doublings. Clickable keyboard for any custom chord. Random chords and mutation, both steered by a Dissonance control. Modes: fixed chord, diatonic progression, random, or mutate chain. |
 | Kit variation | Seeded and reproducible. Variation amount, family spread (borrows parts of neighbouring presets) and tail spread (dry to huge across the pads). Per-pad re-roll, mutate and hold. Locks per group. |
-| Export | Tail length until silent, snapped to the beat, or fixed bars. Normalise per kit or per stab. 16/24/32-bit WAV at 44.1 or 48 kHz. ZIP with mix and/or dry and tail stems, plus `kit.json`. Drag a pad into a DAW (Chrome/Edge). |
+| Export | Tail length until silent, snapped to the beat, or fixed bars. Normalise per kit or per stab. 16/24/32-bit WAV at 44.1 or 48 kHz. WAV files only: the mix and/or dry and tail stems. Chrome/Edge write them into a folder you choose (with `kit.json`); other browsers download them one by one. Drag a pad into a DAW (Chrome/Edge). The claude.ai artifact preview cannot save WAVs, so use `dist/index.html` to export. |
 
 ## Layout
 
 ```
 src/dsp/      oscillators, envelopes, filters, colour, delay, reverb, render (pure JS, no Web Audio)
 src/music/    theory (scales, chord vocabulary, naming) and chords (voicing, random, mutate)
-src/engine/   patch model + schema + macros, presets, kit variation, export (WAV/ZIP)
+src/engine/   patch model + schema + macros, presets, kit variation, export (WAV)
 src/ui/       the web app
 src/worker.js renders stabs off the main thread
 ```

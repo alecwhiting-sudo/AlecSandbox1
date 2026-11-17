@@ -75,6 +75,11 @@ button, select, input { font: inherit; color: inherit; }
 .gap { gap: 8px; margin-top: 10px; }
 .panel-head .gap { margin-top: 0; }
 
+.notice {
+  background: var(--pad-on); border: 1px solid var(--accent); border-radius: var(--radius);
+  padding: 10px 14px; font-size: 13px;
+}
+
 /* controls */
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
 .ctl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
