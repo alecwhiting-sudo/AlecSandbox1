@@ -9,6 +9,7 @@ import { randomChord, mutateChord, VOICINGS, PROGRESSIONS } from '../music/chord
 import { defaultExportSettings, prepareStab, normaliseGains, stabFiles, stabFileBase, kitFolderName, encodeWav, finalLength } from '../engine/export.js';
 import { Rng } from '../dsp/rng.js';
 import { renderStab } from '../dsp/render.js';
+import { FolderLink, CURRENT_DIR, KEPT_DIR } from './folderlink.js';
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, attrs = {}, ...kids) => {
@@ -116,6 +117,7 @@ function onWorkerMessage(m) {
   if (i === state.selected) drawWave();
   if (autoPlayUid === m.uid) { autoPlayUid = null; play(i); }
   if (!pendingUids.size) while (waiters.length) waiters.shift()();
+  syncFolder();
 }
 const allRendered = () => new Promise((res) => (pendingUids.size ? waiters.push(res) : res()));
 
@@ -155,6 +157,7 @@ function regenerate({ immediate = false, audition = false } = {}) {
     drawWave();
     updateChordDisplay();
     persist();
+    syncFolder();
   };
   if (immediate) run(); else regenTimer = setTimeout(run, 180);
 }
@@ -448,7 +451,7 @@ function buildExportPanel() {
   const root = $('#export-controls');
   const ch = (k, conv = (x) => x, rerender = false) => (v) => {
     ex[k] = conv(v); persist();
-    if (rerender) invalidateAll(); else { drawAllPads(); drawWave(); }
+    if (rerender) invalidateAll(); else { drawAllPads(); drawWave(); syncFolder(); }
   };
   root.replaceChildren(
     field('Files', selectInput(['both', 'mix', 'stems'], ex.stems, ch('stems'), ['Mix + dry/tail stems', 'Mix only', 'Dry + tail stems only']), 'wide'),
@@ -721,12 +724,12 @@ $('#wave').addEventListener('click', (e) => {
   const nearest = Math.round(pos / beat) * beat;
   if (Math.abs(nearest - pos) < beat * 0.08) pos = nearest;
   state.chops[st.uid] = Math.max(Math.round(r.sr * 0.02), pos);
-  drawWave(); drawPad(state.selected); play(state.selected);
+  drawWave(); drawPad(state.selected); play(state.selected); syncFolder();
 });
 $('#btn-unchop').addEventListener('click', () => {
   const st = state.stabs[state.selected];
   if (st) delete state.chops[st.uid];
-  drawWave(); drawPad(state.selected);
+  drawWave(); drawPad(state.selected); syncFolder();
 });
 
 // ---------------------------------------------------------------- playback
@@ -812,10 +815,94 @@ function padWav(i) {
   return { data: encodeWav(chs, p.sr, state.ex.bitDepth), name: `${stabFileBase(state.stabs[i], kitMeta())}${suffix}.wav` };
 }
 
-function downloadPad(i) {
+async function downloadPad(i) {
   const w = padWav(i);
-  if (w) downloadBlob(w.data, w.name, 'audio/wav');
+  if (!w) return;
+  if (folder.state === 'linked') {
+    try {
+      const name = await folder.keep(w.name, w.data);
+      $('#status').textContent = `Saved to ${KEPT_DIR}/${name}`;
+    } catch (err) { $('#status').textContent = `Couldn't save to the linked folder (${err.message})`; }
+    return;
+  }
+  downloadBlob(w.data, w.name, 'audio/wav');
 }
+
+// ---------------------------------------------------------------- linked folder (Ableton)
+function folderGroups() {
+  const kit = kitMeta();
+  const exKey = JSON.stringify(state.ex);
+  const groups = [];
+  state.stabs.forEach((st, i) => {
+    if (!state.renders[st.uid]) return;
+    const base = stabFileBase(st, kit);
+    const names = [];
+    if (state.ex.stems !== 'stems') names.push(`${base}.wav`);
+    if (state.ex.stems !== 'mix') names.push(`stems/${base}_dry.wav`, `stems/${base}_tail.wav`);
+    groups.push({
+      key: `${st.uid}|${state.chops[st.uid] ?? ''}|${padGain(i).toFixed(6)}|${exKey}`,
+      names,
+      build: () => stabFiles(prepared(i), base, state.ex),
+    });
+  });
+  return groups;
+}
+
+const folder = new FolderLink(folderGroups, (st, detail) => renderFolderButton(st, detail));
+function syncFolder() { folder.schedule(); }
+
+function renderFolderButton(st, detail) {
+  const b = $('#btn-folder');
+  if (!b) return;
+  b.hidden = !folder.supported || inArtifact;
+  b.classList.toggle('linked', st === 'linked');
+  if (st === 'linked') {
+    b.textContent = `Ableton folder: ${folder.name} ✓`;
+    b.title = `WAVs are kept in "${folder.name}/${CURRENT_DIR}". Click to change or unlink.`;
+    if (detail) $('#status').textContent = `Linked folder ${detail}`;
+  } else if (st === 'needs-permission') {
+    b.textContent = `Reconnect ${folder.name}`;
+    b.title = 'Chrome asks again after a restart before the page may write to your folder.';
+  } else {
+    b.textContent = 'Link Ableton folder';
+    b.title = 'Write the current kit as WAVs into a folder you add to Ableton\'s browser';
+  }
+  const hint = $('#drag-hint');
+  if (hint) hint.textContent = st === 'linked'
+    ? `click or press 1–8 / Q–I · drag from Ableton's browser: ${folder.name} › ${CURRENT_DIR}`
+    : 'click or press 1–8 / Q–I · drag a pad out, or link an Ableton folder';
+}
+
+function folderHelp() {
+  showNotice(`Linked "${folder.name}". The current kit is kept up to date in "${CURRENT_DIR}" and pads you save with ⬇ go to "${KEPT_DIR}". In Ableton Live, open the browser, click "Add Folder…" under Places and pick "${folder.name}" once; your stabs then appear there, ready to drag onto a track.`);
+}
+
+function folderMenu() {
+  const b = $('#btn-folder');
+  let m = $('#folder-menu');
+  if (m) { m.remove(); return; }
+  m = el('div', { id: 'folder-menu', class: 'menu', role: 'menu' },
+    el('button', { role: 'menuitem', onclick: async () => { m.remove(); try { await folder.link(); folderHelp(); } catch { /* cancelled */ } } }, 'Choose a different folder'),
+    el('button', { role: 'menuitem', onclick: () => { m.remove(); folderHelp(); } }, 'How to see it in Ableton'),
+    el('button', { role: 'menuitem', onclick: async () => { m.remove(); await folder.unlink(); $('#notice')?.remove(); } }, 'Unlink folder'),
+  );
+  b.after(m);
+}
+
+$('#btn-folder').addEventListener('click', async () => {
+  try {
+    if (folder.state === 'linked') { folderMenu(); return; }
+    if (folder.state === 'needs-permission') { await folder.reconnect(); return; }
+    await folder.link();
+    folderHelp();
+  } catch (err) {
+    if (err?.name !== 'AbortError') $('#status').textContent = `Couldn't link that folder (${err.message})`;
+  }
+});
+document.addEventListener('click', (e) => {
+  const m = $('#folder-menu');
+  if (m && !e.target.closest('#folder-menu, #btn-folder')) m.remove();
+});
 
 const dragCache = new Map();
 function prepareDrag(i) {
@@ -940,6 +1027,8 @@ window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer
 restore();
 buildAll();
 if (inArtifact) showNotice(NO_WAV_MSG);
+renderFolderButton('off');
+folder.init();
 autoAudition = false;
 regenerate({ immediate: true });
 setTimeout(() => { autoAudition = true; }, 0);

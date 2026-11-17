@@ -19,6 +19,7 @@
     <div class="top-actions">
       <span id="status" class="status" role="status" aria-live="polite"></span>
       <button id="btn-new" class="btn primary" title="New kit with a fresh seed (N)">New kit</button>
+      <div class="folder-wrap"><button id="btn-folder" class="btn" hidden>Link Ableton folder</button></div>
       <button id="btn-export" class="btn" title="Save every stab as WAV files">Export WAVs</button>
     </div>
   </header>
@@ -60,7 +61,7 @@
 
       <section class="panel" id="panel-pads">
         <div class="panel-head">
-          <h2>Stabs <span class="sub">click or press 1–8 / Q–I · drag a pad to your DAW</span></h2>
+          <h2>Stabs <span class="sub" id="drag-hint">click or press 1–8 / Q–I · drag a pad to your DAW</span></h2>
           <div class="progress" id="progress"><div></div></div>
         </div>
         <div id="pads" class="pads"></div>
