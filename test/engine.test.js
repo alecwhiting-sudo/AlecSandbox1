@@ -154,3 +154,23 @@ test('ping-pong delay alternates sides', () => {
   assert.ok(energy(wl, beat) > energy(wr, beat) * 10, 'first repeat left');
   assert.ok(energy(wr, beat * 2) > energy(wl, beat * 2) * 10, 'second repeat right');
 });
+
+test('delay time spread gives pads different tempo-synced times', async () => {
+  const { DELAY_LADDER } = await import('../src/engine/variation.js');
+  const s = { ...defaultKitSettings(), size: 8, delaySpread: 1 };
+  const kit = generateKit(s);
+  const divs = kit.map((k) => k.patch.delay.division);
+  assert.ok(new Set(divs).size >= 4, `only ${[...new Set(divs)]}`);
+  assert.ok(divs.every((d) => DELAY_LADDER.includes(d)));
+  const same = generateKit({ ...s, delaySpread: 0 }).map((k) => k.patch.delay.division);
+  assert.equal(new Set(same).size, 1);
+  const locked = generateKit({ ...s, locks: { ...s.locks, space: true } }).map((k) => k.patch.delay.division);
+  assert.equal(new Set(locked).size, 1);
+});
+
+test('stereo delay can use a separate right-hand time', async () => {
+  const { StereoDelay } = await import('../src/dsp/delay.js');
+  const d = new StereoDelay(48000, 120, { mode: 'stereo', division: '1/8', divisionR: '1/4', feedback: 0, wow: 0 });
+  assert.equal(Math.round(d.dL), 12000);
+  assert.equal(Math.round(d.dR), 24000);
+});

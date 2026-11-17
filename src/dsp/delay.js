@@ -26,7 +26,11 @@ export class StereoDelay {
     const secs = clamp(beatsToSeconds(beats, bpm), 0.02, 2.5);
     this.dL = secs * sr;
     // In stereo mode the right side is offset for width.
-    this.dR = this.mode === 'stereo' ? clamp(secs * (1 + (p.offset ?? 0.12)), 0.02, 2.9) * sr : this.dL;
+    if (this.mode === 'stereo' && p.divisionR && DIVISIONS[p.divisionR]) {
+      this.dR = clamp(beatsToSeconds(DIVISIONS[p.divisionR], bpm), 0.02, 2.9) * sr;
+    } else {
+      this.dR = this.mode === 'stereo' ? clamp(secs * (1 + (p.offset ?? 0.12)), 0.02, 2.9) * sr : this.dL;
+    }
     const size = Math.ceil(3.2 * sr);
     this.L = new Line(size); this.R = new Line(size);
     this.fb = clamp(p.feedback ?? 0.4, 0, 0.97);

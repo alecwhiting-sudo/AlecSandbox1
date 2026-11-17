@@ -32,19 +32,13 @@ export function defaultKitSettings() {
     variation: 0.35,
     familySpread: 0.15,
     tailSpread: 0.6,
+    delaySpread: 0.6,
     macros: defaultMacros(),
     locks: { chord: false, osc: false, filter: false, env: false, colour: false, space: false },
     basePatch: null, // edited patch; null = use preset
     stabSeeds: {},   // per-stab re-roll counters
   };
 }
-
-const NEAR_DIVS = {
-  '1/16': ['1/16', '1/8t', '1/16d'], '1/16d': ['1/16d', '1/8', '1/16'],
-  '1/8t': ['1/8t', '1/16d', '1/8'], '1/8': ['1/8', '1/8d', '1/16d', '1/4'],
-  '1/8d': ['1/8d', '1/8', '1/4', '1/4t'], '1/4t': ['1/4t', '1/8d', '1/4'],
-  '1/4': ['1/4', '1/8d', '1/4d'], '1/4d': ['1/4d', '1/4', '1/8d'],
-};
 
 export function basePatchFor(settings) {
   const p = settings.basePatch ? clone(settings.basePatch) : presetPatch(settings.presetId);
@@ -115,7 +109,7 @@ export function varyPatch(patch, rng, amount, locks = {}) {
     p.reverb.decay = clamp(p.reverb.decay * vmul(rng, v, 0.4), 0.2, 20);
     p.reverb.damping = clamp(p.reverb.damping + rng.bipolar() * v * 0.15, 0, 1);
     p.delay.feedback = clamp(p.delay.feedback + rng.bipolar() * v * 0.1, 0, 0.92);
-    if (rng.chance(v * 0.5) && NEAR_DIVS[p.delay.division]) p.delay.division = rng.pick(NEAR_DIVS[p.delay.division]);
+    // Delay times are spread across the kit by delayPlan(), not here.
   }
   return p;
 }
@@ -185,6 +179,31 @@ function tailPlan(settings) {
   return order.map((x) => 0.5 + (x - 0.5) * s);
 }
 
+// Tempo-synced delay times from short to long.
+export const DELAY_LADDER = ['1/16', '1/8t', '1/16d', '1/8', '1/4t', '1/8d', '1/4', '1/4d', '1/2'];
+
+/**
+ * Delay division per pad. spread 0 = every pad uses the base time; higher
+ * spreads widen the window of times around it (up to the whole ladder) and
+ * deal them out so neighbouring pads differ. All times are in beats, so they
+ * follow the kit's BPM.
+ */
+export function delayPlan(settings, baseDivision) {
+  const n = settings.size;
+  const s = clamp(settings.delaySpread ?? 0, 0, 1);
+  if (s === 0) return Array(n).fill(baseDivision);
+  const rng = new Rng(`${settings.seed}|delays`);
+  let centre = DELAY_LADDER.indexOf(baseDivision);
+  if (centre < 0) centre = 5;
+  const reach = Math.round(1 + s * 4); // 2..5 steps either side
+  const lo = Math.max(0, centre - reach), hi = Math.min(DELAY_LADDER.length - 1, centre + reach);
+  const window = DELAY_LADDER.slice(lo, hi + 1);
+  // Base time appears most often; the rest are shuffled in.
+  const deck = [];
+  while (deck.length < n) deck.push(...rng.shuffle(window), baseDivision);
+  return rng.shuffle(deck.slice(0, n)).map((d) => d);
+}
+
 /**
  * Generate kit descriptors (no audio). Each stab has { index, seed, chord, patch, tail, info }.
  * Pass `previous` (the current kit) to keep chords of earlier stabs when re-rolling one pad.
@@ -192,6 +211,7 @@ function tailPlan(settings) {
 export function generateKit(settings, previous = null) {
   const base = basePatchFor(settings);
   const tails = tailPlan(settings);
+  const delays = delayPlan(settings, base.delay.division);
   const stabs = [];
   let prevChord = null;
   for (let i = 0; i < settings.size; i++) {
@@ -204,13 +224,28 @@ export function generateKit(settings, previous = null) {
     prevChord = chord;
     const { patch: fam, borrowed } = borrowFamily(base, rng.fork('family'), settings, settings.familySpread ?? 0);
     let patch = varyPatch(fam, rng.fork('vary'), settings.variation ?? 0, settings.locks);
-    if (!settings.locks?.space) patch = applyTail(patch, tails[i]);
+    if (!settings.locks?.space) {
+      patch = applyTail(patch, tails[i]);
+      const s = clamp(settings.delaySpread ?? 0, 0, 1);
+      if (s > 0) {
+        const dr = rng.fork('delay');
+        // A re-rolled pad draws a fresh time instead of its slot in the plan.
+        patch.delay.division = (settings.stabSeeds?.[i] ?? 0) > 0
+          ? dr.pick(DELAY_LADDER.slice(Math.max(0, DELAY_LADDER.indexOf(base.delay.division) - 3), DELAY_LADDER.indexOf(base.delay.division) + 4))
+          : delays[i];
+        // Polyrhythmic stereo echoes: a different time on the right.
+        if (patch.delay.mode === 'stereo' && dr.chance(s * 0.5)) {
+          const k = DELAY_LADDER.indexOf(patch.delay.division);
+          patch.delay.divisionR = DELAY_LADDER[Math.min(DELAY_LADDER.length - 1, Math.max(0, k + dr.pick([-2, -1, 1, 2])))];
+        } else delete patch.delay.divisionR;
+      }
+    }
     // Occasional dub throw on long-tail pads.
     if (!settings.locks?.space && tails[i] > 0.8 && rng.chance(0.35)) patch.delay.feedback = Math.max(patch.delay.feedback, 0.72);
     stabs.push({
       index: i, seed, chord, patch, tail: tails[i],
       renderSeed: rng.int(1, 2 ** 31 - 1),
-      info: { borrowed, tailLabel: tailLabel(tails[i]) },
+      info: { borrowed, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch) },
       settingsKey: settingsKey(settings),
     });
   }
@@ -224,6 +259,11 @@ export function mutateStab(stab, settings, salt) {
     : mutateChord(rng.fork('c'), stab.chord, { strength: Math.max(0.25, settings.mutation), dissonance: settings.dissonance, key: settings.key, scale: settings.scale });
   const patch = varyPatch(stab.patch, rng.fork('p'), Math.max(0.15, (settings.variation ?? 0.3) * 0.6), settings.locks);
   return { ...stab, chord, patch, seed: `${stab.seed}~${salt}`, renderSeed: rng.int(1, 2 ** 31 - 1), info: { ...stab.info, mutated: (stab.info?.mutated ?? 0) + 1 } };
+}
+
+function delayLabel(p) {
+  if (!(p.delay?.send > 0)) return '';
+  return p.delay.divisionR ? `${p.delay.division}+${p.delay.divisionR}` : p.delay.division;
 }
 
 function tailLabel(f) {

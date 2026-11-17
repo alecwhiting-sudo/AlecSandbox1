@@ -307,6 +307,7 @@ function buildKitPanel() {
     rangeInput({ label: 'Variation', min: 0, max: 1, step: 0.01 }, s.variation, (v) => { s.variation = v; regenerate(); }, 'wide'),
     rangeInput({ label: 'Family spread', min: 0, max: 1, step: 0.01 }, s.familySpread, (v) => { s.familySpread = v; regenerate(); }),
     rangeInput({ label: 'Tail spread', min: 0, max: 1, step: 0.01 }, s.tailSpread, (v) => { s.tailSpread = v; regenerate(); }),
+    rangeInput({ label: 'Delay time spread', min: 0, max: 1, step: 0.01 }, s.delaySpread ?? 0, (v) => { s.delaySpread = v; regenerate(); }, 'wide'),
   );
 }
 
@@ -654,7 +655,7 @@ function buildPads() {
     },
     el('div', { class: 'p-top' }, el('span', { class: 'p-chord', title: st.chord.notes.map(noteName).join(' ') }, st.chord.name), el('span', { class: 'p-num' }, PAD_KEYS[i]?.toUpperCase() ?? '')),
     canvas,
-    el('div', { class: 'p-top' }, el('span', { class: 'p-tail' }, `${st.info?.tailLabel ?? ''} tail`), el('span', { class: 'p-num', 'data-len': '' }, '')),
+    el('div', { class: 'p-top' }, el('span', { class: 'p-tail' }, `${st.info?.tailLabel ?? ''} tail${st.info?.delay ? ` · ${st.info.delay}` : ''}`), el('span', { class: 'p-num', 'data-len': '' }, '')),
     el('div', { class: 'p-meta' }, st.info?.borrowed ? `+ ${st.info.borrowed.groups.join(', ')} from ${st.info.borrowed.from}` : st.info?.mutated ? `mutated ×${st.info.mutated}` : ''),
     el('div', { class: 'p-actions' },
       el('button', { title: 'Re-roll this pad', onclick: (e) => { e.stopPropagation(); rerollPad(i); } }, '↻'),
