@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stab Lab</title>
+  <meta name="description" content="Generate kits of synth stabs with filters, envelope followers, subtle variation and reverb/delay tails.">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">◢◣</span>
+      <div>
+        <h1>Stab Lab</h1>
+        <p class="tagline">Synth stab kit generator</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="status" class="status" role="status" aria-live="polite"></span>
+      <button id="btn-new" class="btn primary" title="New kit with a fresh seed (N)">New kit</button>
+      <button id="btn-export" class="btn" title="Download every stab as a ZIP">Export ZIP</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section class="panel" id="panel-kit">
+        <h2>Kit</h2>
+        <div id="kit-controls" class="grid2"></div>
+      </section>
+      <section class="panel" id="panel-chord">
+        <h2>Chords</h2>
+        <div id="chord-controls"></div>
+      </section>
+      <section class="panel" id="panel-locks">
+        <h2>Locks <span class="sub">keep these the same across the kit</span></h2>
+        <div id="lock-controls" class="chips"></div>
+      </section>
+      <section class="panel" id="panel-export">
+        <h2>Export</h2>
+        <div id="export-controls" class="grid2"></div>
+        <div class="row gap">
+          <button id="btn-save" class="btn small">Save kit file</button>
+          <label class="btn small file-btn">Load kit file<input id="file-load" type="file" accept=".json,application/json" hidden></label>
+        </div>
+      </section>
+    </aside>
+
+    <section class="main">
+      <section class="panel" id="panel-macros">
+        <div class="panel-head">
+          <h2 id="preset-title">Character</h2>
+          <div class="seg" id="audition" role="group" aria-label="Audition">
+            <button data-v="mix" class="on">Mix</button><button data-v="dry">Dry</button><button data-v="wet">Tail</button>
+          </div>
+        </div>
+        <div id="macros" class="macros"></div>
+      </section>
+
+      <section class="panel" id="panel-pads">
+        <div class="panel-head">
+          <h2>Stabs <span class="sub">click or press 1–8 / Q–I · drag a pad to your DAW</span></h2>
+          <div class="progress" id="progress"><div></div></div>
+        </div>
+        <div id="pads" class="pads"></div>
+      </section>
+
+      <section class="panel" id="panel-wave">
+        <div class="panel-head">
+          <h2 id="wave-title">—</h2>
+          <div class="row gap">
+            <span id="wave-info" class="sub"></span>
+            <button id="btn-unchop" class="btn small" hidden>Reset chop</button>
+          </div>
+        </div>
+        <canvas id="wave" class="wave" height="140" aria-label="Waveform of the selected stab. Click to chop the tail at that point."></canvas>
+        <p class="hint">Bright = dry stab, soft = reverb/delay tail. Click the waveform to chop the tail there.</p>
+      </section>
+
+      <section class="panel" id="panel-sound">
+        <div class="panel-head">
+          <h2>Sound design <span class="sub">edits the base sound every stab varies from</span></h2>
+          <button id="btn-reset-sound" class="btn small">Reset to preset</button>
+        </div>
+        <div id="sound" class="sound"></div>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

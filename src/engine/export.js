@@ -43,8 +43,9 @@ export function finalLength(rendered, ex, bpm) {
 }
 
 /** Build output channels for a stab: { mix, dry, wet } each [L, R] at final length with fade. */
-export function prepareStab(rendered, ex, bpm, gain = 1) {
-  const n = finalLength(rendered, ex, bpm);
+export function prepareStab(rendered, ex, bpm, gain = 1, chopAt = null) {
+  let n = finalLength(rendered, ex, bpm);
+  if (chopAt != null) n = Math.max(1, Math.min(Math.round(chopAt), n));
   const fade = Math.min(n, Math.round(((ex.fadeMs ?? 30) / 1000) * rendered.sr));
   const take = (src) => {
     const out = new Float32Array(n);

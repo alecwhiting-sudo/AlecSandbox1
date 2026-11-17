@@ -125,8 +125,11 @@ export function mutateChord(rng, chord, opts = {}) {
     let c = mutateOnce(rng, chord, opts);
     if (D < 0.5 && rng.chance(1 - D * 2)) c = snapToScale(c, key, sc);
     if (c.notes.join() === chord.notes.join()) continue;
-    const score = Math.abs(dissonanceOf(c.notes) - D * 0.9)
+    const pcs = (x) => [...new Set(x.notes.map((m) => m % 12))].sort().join();
+    const score = Math.abs(dissonanceOf(c.notes) - (0.15 + D * 0.8))
       + (named(c) ? 0 : 0.25 * (1 - D))
+      + (pcs(c) === pcs(chord) ? 0.3 : 0)                 // prefer a genuinely new chord
+      + Math.abs(c.notes.length - chord.notes.length) * 0.06 // keep its richness
       + outOfKey(c) * 0.6 * (1 - D)
       + rng.next() * 0.08;
     if (score < bestScore) { bestScore = score; best = c; }
