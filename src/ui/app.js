@@ -767,7 +767,25 @@ document.addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------- export
 const kitMeta = () => ({ ...state.settings, presetName: PRESET_BY_ID[state.settings.presetId]?.name ?? 'stab' });
 
-function downloadBlob(data, name, type) {
+// Inside a claude.ai artifact, files must go through the downloads capability
+// (which accepts .zip/.json but not .wav, so single WAVs are zipped there).
+const inArtifact = !!(window.claude && typeof window.claude.use === 'function');
+const downloadsCap = inArtifact ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+
+async function downloadBlob(data, name, type) {
+  if (inArtifact) {
+    const d = await downloadsCap;
+    if (!d) { $('#status').textContent = 'Saving files is not available in this view'; return; }
+    let filename = name, payload = data;
+    if (name.endsWith('.wav')) { payload = makeZip([{ name, data }]); filename = name.replace(/\.wav$/, '.zip'); }
+    try {
+      await d.save({ filename, data: new Blob([payload]) });
+      $('#status').textContent = `Saved ${filename}`;
+    } catch (err) {
+      if (err?.code !== 'declined') $('#status').textContent = `Could not save ${filename} (${err?.code ?? 'error'})`;
+    }
+    return;
+  }
   const url = URL.createObjectURL(new Blob([data], { type }));
   const a = el('a', { href: url, download: name });
   document.body.append(a); a.click(); a.remove();
@@ -827,7 +845,7 @@ $('#btn-export').addEventListener('click', async () => {
     stabs: state.stabs.map((s) => ({ index: s.index + 1, chord: s.chord.name, notes: s.chord.notes.map(noteName), tail: s.info?.tailLabel })),
   };
   files.push({ name: `${folder}/kit.json`, data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
-  downloadBlob(makeZip(files), `${folder}.zip`, 'application/zip');
+  await downloadBlob(makeZip(files), `${folder}.zip`, 'application/zip');
   btn.disabled = false;
   $('#status').textContent = `Exported ${state.stabs.length} stabs`;
 });

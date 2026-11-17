@@ -16,21 +16,22 @@
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #f3f1ec; --panel: #ffffff; --panel-2: #f6f4f0; --line: #dfdbd2;
-    --text: #23211d; --muted: #6d6a63; --accent: #d8691b; --accent-2: #1f8f87;
-    --accent-ink: #fff; --pad: #f1eee8; --pad-on: #fbe9d8;
+    --bg: #eceef1; --panel: #ffffff; --panel-2: #f4f5f7; --line: #d6d9de;
+    --text: #1c1e22; --muted: #5f636b; --accent: #e0661a; --accent-2: #14857e;
+    --accent-ink: #fff; --pad: #f3f4f6; --pad-on: #fdebdc;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
-  --bg: #f3f1ec; --panel: #ffffff; --panel-2: #f6f4f0; --line: #dfdbd2;
-  --text: #23211d; --muted: #6d6a63; --accent: #d8691b; --accent-2: #1f8f87;
-  --accent-ink: #fff; --pad: #f1eee8; --pad-on: #fbe9d8;
+--bg: #eceef1; --panel: #ffffff; --panel-2: #f4f5f7; --line: #d6d9de;
+  --text: #1c1e22; --muted: #5f636b; --accent: #e0661a; --accent-2: #14857e;
+  --accent-ink: #fff; --pad: #f3f4f6; --pad-on: #fdebdc;
   color-scheme: light;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
 body {
   background: var(--bg); color: var(--text);
   font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -44,8 +45,9 @@ button, select, input { font: inherit; color: inherit; }
 
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
-  position: sticky; top: 0; z-index: 5;
+  padding-block: 12px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); background: var(--panel);
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand h1 { font-size: 18px; letter-spacing: .02em; }
@@ -64,7 +66,7 @@ button, select, input { font: inherit; color: inherit; }
 .btn:disabled { opacity: .5; cursor: progress; }
 .file-btn { display: inline-block; }
 
-.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 16px; padding: 16px 20px 40px; max-width: 1500px; margin: 0 auto; }
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 16px; padding-block: 16px 40px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); max-width: 1500px; margin: 0 auto; }
 .sidebar, .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; }
 .panel > h2 { margin-bottom: 12px; }
@@ -142,7 +144,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
 /* chord keyboard */
 .keys { position: relative; height: 70px; margin-top: 6px; user-select: none; touch-action: manipulation; }
 .keys .w, .keys .b { position: absolute; top: 0; border: 1px solid var(--line); cursor: pointer; }
-.keys .w { height: 100%; background: #f4f1ea; border-radius: 0 0 4px 4px; }
+.keys .w { height: 100%; background: #f7f7f5; border-radius: 0 0 4px 4px; }
 .keys .b { height: 60%; background: #1d1d1f; z-index: 1; border-radius: 0 0 3px 3px; }
 .keys .on.w { background: var(--accent); }
 .keys .on.b { background: var(--accent); border-color: #000; }
@@ -158,13 +160,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
 .sound .grid2 { margin-top: 10px; }
 .toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 @media (max-width: 1000px) {
-  .layout { grid-template-columns: minmax(0, 1fr); padding: 12px 16px 32px; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding-block: 12px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .sidebar { order: 2; }
   .macros { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
-  .topbar { padding: 10px 16px; }
+  .topbar { padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .pads { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .knob svg { width: 54px; height: 54px; }
 }
