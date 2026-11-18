@@ -111,7 +111,7 @@ const waiters = [];
 function onWorkerMessage(m) {
   if (m.type !== 'stab') return;
   if (!state.stabs.some((s) => s.uid === m.uid)) return;
-  state.renders[m.uid] = { sr: m.sr, length: m.length, dryLength: m.dryLength, peak: m.peak, dry: m.dry, wet: m.wet };
+  state.renders[m.uid] = { sr: m.sr, length: m.length, dryLength: m.dryLength, peak: m.peak, limitDb: m.limitDb ?? 0, dry: m.dry, wet: m.wet };
   pendingUids.delete(m.uid);
   updateProgress();
   const i = state.stabs.findIndex((s) => s.uid === m.uid);
@@ -333,7 +333,7 @@ function loadPreset(id) {
   const pr = PRESET_BY_ID[id];
   if (pr?.chord && !s.customNotes) Object.assign(s.chord, pr.chord);
   $('#preset-title').textContent = pr?.name ?? 'Character';
-  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip(); buildCompStrip();
+  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip(); buildCompStrip(); buildLimitStrip();
   regenerate({ audition: true });
 }
 
@@ -564,6 +564,7 @@ function buildMacros() {
   buildDelayStrip();
   buildTextureStrip();
   buildCompStrip();
+  buildLimitStrip();
 }
 
 // Quick delay controls next to the macros (edit the base sound).
@@ -623,6 +624,24 @@ function buildCompStrip() {
   );
 }
 
+// Limiter quick controls.
+function buildLimitStrip() {
+  const root = $('#limit-strip');
+  if (!root) return;
+  const lim = currentBase().limiter ?? { on: false, drive: 3, release: 0.08 };
+  const set = (fn) => { const p = editablePatch(); p.limiter = p.limiter ?? { on: true, drive: 3, release: 0.08 }; fn(p.limiter); markEdited(); buildSoundPanel(); buildLimitStrip(); regenerate({ audition: true }); };
+  const slider = (label, key, prm, hint) => el('div', { class: 'strip-ctl wide', title: hint },
+    rangeInput({ label, ...prm }, lim[key], (v) => { const p = editablePatch(); p.limiter = p.limiter ?? { on: true, drive: 3, release: 0.08 }; p.limiter[key] = v; markEdited(); regenerate({ audition: true }); }));
+  root.replaceChildren(
+    el('span', { class: 'lbl' }, 'Limit'),
+    el('div', { class: 'seg', role: 'group', 'aria-label': 'Limiter' },
+      el('button', { class: lim.on ? 'on' : '', title: 'Catch the peaks of the stab and its tails', onclick: () => set((x) => { x.on = true; }) }, 'On'),
+      el('button', { class: lim.on ? '' : 'on', title: 'No limiting', onclick: () => set((x) => { x.on = false; }) }, 'Off')),
+    slider('Drive', 'drive', { min: 0, max: 18, step: 0.5, unit: 'dB' }, 'How hard to push into the limiter: louder and denser, same peak'),
+    slider('Release', 'release', { min: 0.005, max: 1, step: 0.005, scale: 'log', unit: 's' }, 'How fast the limiter lets go'),
+  );
+}
+
 // Crackle, hiss and air noise, next to the macros.
 function buildTextureStrip() {
   const root = $('#texture-strip');
@@ -673,6 +692,7 @@ function buildSoundPanel() {
         if (prm.path.startsWith('delay.')) buildDelayStrip();
         if (prm.path.startsWith('texture.') || prm.path === 'noise.air') buildTextureStrip();
         if (prm.path.startsWith('comp.')) buildCompStrip();
+        if (prm.path.startsWith('limiter.')) buildLimitStrip();
         regenerate({ audition: true });
       };
       if (prm.kind === 'range') grid.append(rangeInput(prm, value, onChange));
@@ -918,7 +938,7 @@ function drawWave() {
   ctx.restore();
   const len = chop ?? full.length;
   const chs = st.chord.notes.map(noteName).join(' ');
-  $('#wave-info').textContent = `${chs} · ${(len / r.sr).toFixed(2)} s${chop != null ? ' (chopped)' : ''}${rev ? ' · reversed' : ''} · ${(len / beat).toFixed(1)} beats`;
+  $('#wave-info').textContent = `${chs} · ${(len / r.sr).toFixed(2)} s${chop != null ? ' (chopped)' : ''}${rev ? ' · reversed' : ''}${r.limitDb < -0.1 ? ` · limited ${r.limitDb.toFixed(1)} dB` : ''} · ${(len / beat).toFixed(1)} beats`;
 }
 
 $('#wave').addEventListener('click', (e) => {

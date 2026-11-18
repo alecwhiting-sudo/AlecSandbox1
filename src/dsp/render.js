@@ -12,6 +12,7 @@ import { StereoDelay } from './delay.js';
 import { Reverb } from './reverb.js';
 import { Texture } from './texture.js';
 import { Compressor } from './compressor.js';
+import { limitStems } from './limiter.js';
 
 const CTRL = 16; // control-rate interval in samples
 
@@ -266,6 +267,11 @@ export function renderStab(patch, notes, opts = {}) {
     }
   }
   const length = end;
+  const limitDb = limitStems([dryL, dryR], [wetL, wetR], length, sr, patch.limiter ?? {});
+  if (limitDb < 0) {
+    peak = 0;
+    for (let i = 0; i < length; i++) peak = Math.max(peak, Math.abs(dryL[i] + wetL[i]), Math.abs(dryR[i] + wetR[i]));
+  }
   return {
     sr,
     dry: [dryL.subarray(0, length), dryR.subarray(0, length)],
@@ -273,5 +279,6 @@ export function renderStab(patch, notes, opts = {}) {
     length,
     dryLength: Math.min(dryLength, length),
     peak,
+    limitDb,
   };
 }

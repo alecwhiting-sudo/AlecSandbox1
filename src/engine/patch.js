@@ -24,6 +24,7 @@ export function defaultPatch() {
     noise: { level: 0.08, decay: 0.015, colour: 0.7, air: 0, airColour: 0.7 },
     texture: { crackle: 0, density: 0.4, tone: 0.5, hiss: 0, follow: 0.6 },
     comp: { amount: 0.3, mode: 'stab', ratio: 4, attack: 0.012, release: 0.15, mix: 1 },
+    limiter: { on: true, drive: 3, release: 0.08 },
     drift: 3, driftRate: 0.6,
     pitchEnv: { amount: 0, decay: 0.03 },
     amp: { a: 0.002, d: 0.35, s: 0.25, r: 0.25, curve: 0.6, attackCurve: 0.3 },
@@ -81,7 +82,7 @@ export const LOCK_GROUPS = {
   osc: { label: 'Oscillators', keys: ['osc', 'sub', 'noise', 'drift', 'driftRate'] },
   filter: { label: 'Filters', keys: ['filterA', 'filterB', 'routing', 'follower'] },
   env: { label: 'Envelopes', keys: ['amp', 'fenv', 'pitchEnv', 'gate', 'strum', 'strumDir', 'velocity'] },
-  colour: { label: 'Colour', keys: ['colour', 'transient', 'chorus', 'eq', 'width', 'voiceSpread', 'level', 'texture', 'comp'] },
+  colour: { label: 'Colour', keys: ['colour', 'transient', 'chorus', 'eq', 'width', 'voiceSpread', 'level', 'texture', 'comp', 'limiter'] },
   space: { label: 'Space', keys: ['delay', 'reverb', 'delayToReverb', 'duck', 'sidechain'] },
 };
 
@@ -275,6 +276,9 @@ export const SCHEMA = [
       r('comp.attack', 'Attack', 0.0002, 0.3, 0.0001, { unit: 's', scale: 'log' }),
       r('comp.release', 'Release', 0.01, 2, 0.01, { unit: 's', scale: 'log' }),
       r('comp.mix', 'Mix (parallel)', 0, 1, 0.01),
+      tog('limiter.on', 'Limiter'),
+      r('limiter.drive', 'Limiter drive', 0, 18, 0.5, { unit: 'dB' }),
+      r('limiter.release', 'Limiter release', 0.005, 1, 0.005, { unit: 's', scale: 'log' }),
     ],
   },
   {
