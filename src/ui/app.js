@@ -601,11 +601,10 @@ function buildDelayStrip() {
 // ---------------------------------------------------------------- foldable control rows
 // Each quick-control row (Vary, Wave, Delay, Texture, Dynamics) folds to one
 // line with a summary. Remembered per browser; folded by default on phones.
-const FOLD_KEY = 'stablab.folded.v1';
+const FOLD_KEY = 'stablab.folded.v2';
 let folded = (() => {
   try { const v = JSON.parse(localStorage.getItem(FOLD_KEY)); if (v && typeof v === 'object') return v; } catch { /* storage unavailable */ }
-  const phone = window.matchMedia?.('(max-width: 560px)').matches;
-  return phone ? { vary: true, wave: true, delay: true, texture: true, dynamics: true } : {};
+  return {};
 })();
 function saveFolded() { try { localStorage.setItem(FOLD_KEY, JSON.stringify(folded)); } catch { /* ignore */ } }
 
@@ -630,19 +629,30 @@ function foldable(root, id, summary) {
   updateFoldAllButton();
 }
 
-const FOLD_IDS = ['vary', 'wave', 'delay', 'texture', 'dynamics'];
-function updateFoldAllButton() {
+// "Hide controls" removes the control rows completely (only the knobs stay);
+// "Show controls" brings them back with each row's own fold state.
+// Remembered per browser; hidden by default on phones.
+const HIDE_KEY = 'stablab.controlsHidden.v1';
+let controlsHidden = (() => {
+  try { const v = localStorage.getItem(HIDE_KEY); if (v !== null) return v === '1'; } catch { /* storage unavailable */ }
+  return !!window.matchMedia?.('(max-width: 560px)').matches;
+})();
+function applyControlsHidden() {
+  const strips = $('#strips');
+  if (strips) strips.hidden = controlsHidden;
   const b = $('#btn-fold-all');
-  if (!b) return;
-  const allFolded = FOLD_IDS.every((id) => folded[id]);
-  b.textContent = allFolded ? 'Show controls' : 'Hide controls';
+  if (b) {
+    b.textContent = controlsHidden ? 'Show controls' : 'Hide controls';
+    b.setAttribute('aria-expanded', String(!controlsHidden));
+  }
 }
+function updateFoldAllButton() { applyControlsHidden(); }
 $('#btn-fold-all')?.addEventListener('click', () => {
-  const allFolded = FOLD_IDS.every((id) => folded[id]);
-  for (const id of FOLD_IDS) folded[id] = !allFolded;
-  saveFolded();
-  buildMacros();
+  controlsHidden = !controlsHidden;
+  try { localStorage.setItem(HIDE_KEY, controlsHidden ? '1' : '0'); } catch { /* ignore */ }
+  applyControlsHidden();
 });
+applyControlsHidden();
 
 // How much each pad's macro knobs wander from the kit's knob settings.
 function buildVaryStrip() {

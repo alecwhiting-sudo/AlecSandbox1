@@ -60,18 +60,20 @@
         <div class="panel-head">
           <h2 id="preset-title">Character</h2>
           <div class="row gap">
-          <button id="btn-fold-all" class="btn small" title="Fold or unfold the control rows below the knobs">Hide controls</button>
+          <button id="btn-fold-all" class="btn small" title="Show or hide the control rows below the knobs" aria-controls="strips">Hide controls</button>
           <div class="seg" id="audition" role="group" aria-label="Audition">
             <button data-v="mix" class="on">Mix</button><button data-v="dry">Dry</button><button data-v="wet">Tail</button>
           </div>
           </div>
         </div>
         <div id="macros" class="macros"></div>
-        <div id="vary-strip" class="strip"></div>
-        <div id="wave-strip" class="strip"></div>
-        <div id="delay-strip" class="strip"></div>
-        <div id="texture-strip" class="strip"></div>
-        <div id="dynamics-strip" class="strip"></div>
+        <div id="strips">
+          <div id="vary-strip" class="strip"></div>
+          <div id="wave-strip" class="strip"></div>
+          <div id="delay-strip" class="strip"></div>
+          <div id="texture-strip" class="strip"></div>
+          <div id="dynamics-strip" class="strip"></div>
+        </div>
       </section>
 
       <section class="panel" id="panel-pads">
