@@ -15,7 +15,11 @@ function blep(t, dt) {
 
 const ORGAN_RATIOS = [0.5, 1.5, 1, 2, 3, 4, 5, 6, 8];
 
-export const OSC_TYPES = ['saw', 'pulse', 'tri', 'morph', 'sine', 'supersaw', 'fm', 'pd', 'reso', 'organ'];
+export const OSC_TYPES = ['saw', 'square', 'pulse', 'tri', 'morph', 'sine', 'supersaw', 'fm', 'pd', 'reso', 'organ'];
+export const OSC_LABELS = {
+  saw: 'Saw', square: 'Square', pulse: 'Pulse (PWM)', tri: 'Triangle', morph: 'Blend (tri › saw › square)',
+  sine: 'Sine', supersaw: 'Supersaw', fm: 'FM', pd: 'Phase distortion', reso: 'CZ resonance', organ: 'Organ',
+};
 
 export class Oscillator {
   /**
@@ -80,6 +84,13 @@ export class Oscillator {
       case 'saw': {
         const t = this.phase;
         out = 2 * t - 1 - blep(t, dt);
+        this.phase = t + dt; if (this.phase >= 1) this.phase -= 1;
+        break;
+      }
+      case 'square': {
+        // A true 50% square, band-limited.
+        const t = this.phase;
+        out = (t < 0.5 ? 1 : -1) + blep(t, dt) - blep((t + 0.5) % 1, dt);
         this.phase = t + dt; if (this.phase >= 1) this.phase -= 1;
         break;
       }

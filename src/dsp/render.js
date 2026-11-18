@@ -32,7 +32,7 @@ class Voice {
     const isLowest = index === 0;
     this.sub = null;
     if (isLowest && patch.sub && patch.sub.level > 0) {
-      const t = patch.sub.wave === 'square' ? 'pulse' : patch.sub.wave === 'tri' ? 'tri' : 'sine';
+      const t = patch.sub.wave === 'square' ? 'square' : patch.sub.wave === 'tri' ? 'tri' : 'sine';
       this.sub = { osc: new Oscillator(sr, { type: t, pw: 0.5, phaseRand: 0 }, freq * Math.pow(2, patch.sub.octave ?? -1), rng), level: patch.sub.level };
     }
     this.noise = null;

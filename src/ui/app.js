@@ -716,7 +716,7 @@ function buildDynamicsStrip() {
 }
 
 // Waveform quick controls for Osc 1 (Osc 2 and 3 live in Sound design).
-const WAVES = [['saw', 'Saw'], ['pulse', 'Square'], ['tri', 'Triangle'], ['morph', 'Blend']];
+const WAVES = [['saw', 'Saw'], ['square', 'Square'], ['tri', 'Triangle'], ['morph', 'Blend']];
 function buildWaveStrip() {
   const root = $('#wave-strip');
   if (!root) return;
@@ -730,10 +730,10 @@ function buildWaveStrip() {
       ...WAVES.map(([v, label]) => el('button', {
         class: type === v ? 'on' : '',
         title: v === 'morph' ? 'Blend: slide from triangle through saw to square' : `${label} wave`,
-        onclick: () => set((x) => { x.type = v; if (v === 'pulse') x.pw = 0.5; }),
+        onclick: () => set((x) => { x.type = v; }),
       }, label))),
     el('div', { class: 'strip-ctl wide', title: 'Triangle (left) › Saw (middle) › Square (right). Moving it switches Osc 1 to Blend.' },
-      rangeInput({ label: 'Blend  tri › saw › square', min: 0, max: 1, step: 0.01 }, o.type === 'morph' ? (o.shape ?? 0.5) : o.type === 'tri' ? 0 : o.type === 'pulse' ? 1 : 0.5, (v) => {
+      rangeInput({ label: 'Blend  tri › saw › square', min: 0, max: 1, step: 0.01 }, o.type === 'morph' ? (o.shape ?? 0.5) : o.type === 'tri' ? 0 : (o.type === 'square' || o.type === 'pulse') ? 1 : 0.5, (v) => {
         const p = editablePatch();
         const was = p.osc[0].type;
         p.osc[0].type = 'morph'; p.osc[0].on = true; p.osc[0].shape = v;

@@ -1,7 +1,7 @@
 // Patch model: defaults, parameter schema (drives the UI and any future
 // plugin parameter list), macros and lock groups.
 
-import { OSC_TYPES } from '../dsp/oscillators.js';
+import { OSC_TYPES, OSC_LABELS } from '../dsp/oscillators.js';
 import { FILTER_TYPES, FILTER_LABELS } from '../dsp/filters.js';
 import { SAT_MODES } from '../dsp/colour.js';
 import { DELAY_MODES } from '../dsp/delay.js';
@@ -170,7 +170,7 @@ const tog = (path, label) => ({ path, label, kind: 'toggle' });
 
 const oscParams = (i) => [
   tog(`osc.${i}.on`, 'On'),
-  sel(`osc.${i}.type`, 'Wave', OSC_TYPES),
+  sel(`osc.${i}.type`, 'Wave', OSC_TYPES, OSC_TYPES.map((t) => OSC_LABELS[t])),
   r(`osc.${i}.level`, 'Level', 0, 1, 0.01),
   r(`osc.${i}.octave`, 'Octave', -2, 2, 1),
   r(`osc.${i}.semi`, 'Semi', -12, 12, 1),

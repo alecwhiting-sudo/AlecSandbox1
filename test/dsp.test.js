@@ -18,7 +18,7 @@ function sine(freq, n) {
 }
 
 test('oscillators produce the requested pitch', () => {
-  for (const type of ['saw', 'pulse', 'sine', 'tri']) {
+  for (const type of ['saw', 'square', 'pulse', 'sine', 'tri']) {
     const o = new Oscillator(SR, { type, phaseRand: 0 }, 220, new Rng(1));
     let crossings = 0, prev = 0;
     for (let i = 0; i < SR; i++) {
@@ -154,4 +154,19 @@ test('blend oscillator: triangle at 0, saw at 0.5, square at 1', () => {
   assert.ok(corr(grab(0.5), grab(0, 'saw')) > 0.99);
   assert.ok(corr(grab(1), grab(0, 'pulse')) > 0.99);
   for (const sh of [0.25, 0.75]) for (const v of grab(sh)) assert.ok(Number.isFinite(v) && Math.abs(v) < 1.5);
+});
+
+test('square is a true 50% square matching pulse at width 0.5', () => {
+  const run = (type) => {
+    const o = new Oscillator(SR, { type, pw: 0.5, phaseRand: 0 }, 110, new Rng(1));
+    const out = [];
+    for (let i = 0; i < SR / 10; i++) { o.process(1); out.push(o.l); }
+    return out;
+  };
+  const sq = run('square'), pu = run('pulse');
+  let ab = 0, aa = 0, bb = 0, mean = 0, high = 0;
+  for (let i = 0; i < sq.length; i++) { ab += sq[i] * pu[i]; aa += sq[i] * sq[i]; bb += pu[i] * pu[i]; mean += sq[i]; if (sq[i] > 0) high++; }
+  assert.ok(ab / Math.sqrt(aa * bb) > 0.999);
+  assert.ok(Math.abs(mean / sq.length) < 0.02, 'no DC');
+  assert.ok(Math.abs(high / sq.length - 0.5) < 0.02, '50% duty');
 });
