@@ -1,7 +1,7 @@
 # Stab Lab by Divurj
 
 Stab Lab generates **kits of synth stabs** for electronic music. It's made by
-[Divurj](https://www.divurj.com), alongside [RatMode](https://www.divurj.com/ratmode),
+[Divurj](https://www.divurj.com) (www.divurj.com), alongside [RatMode](https://www.divurj.com/ratmode),
 SampleArk and [Visualz](https://visualz-zeta.vercel.app/). It borrows RatMode's
 look: flat greys, one acid-orange accent, and recessed knobs drawn like
 RatMode's own knob painter (`Source/UI/UIConstants.h` in the RatMode repo).
