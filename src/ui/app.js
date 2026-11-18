@@ -595,7 +595,54 @@ function buildDelayStrip() {
         const p = editablePatch(); p.delay.grit = v; markEdited(); regenerate({ audition: true });
       })),
   );
+  foldable(root, 'delay', d.send <= 0 ? 'Off' : `${{ pingpong: 'Ping-pong', stereo: 'Stereo', tape: 'Tape' }[d.mode] ?? d.mode} · ${d.division} · ${Math.round(d.send * 100)}%`);
 }
+
+// ---------------------------------------------------------------- foldable control rows
+// Each quick-control row (Vary, Wave, Delay, Texture, Dynamics) folds to one
+// line with a summary. Remembered per browser; folded by default on phones.
+const FOLD_KEY = 'stablab.folded.v1';
+let folded = (() => {
+  try { const v = JSON.parse(localStorage.getItem(FOLD_KEY)); if (v && typeof v === 'object') return v; } catch { /* storage unavailable */ }
+  const phone = window.matchMedia?.('(max-width: 560px)').matches;
+  return phone ? { vary: true, wave: true, delay: true, texture: true, dynamics: true } : {};
+})();
+function saveFolded() { try { localStorage.setItem(FOLD_KEY, JSON.stringify(folded)); } catch { /* ignore */ } }
+
+function foldable(root, id, summary) {
+  const lbl = root.querySelector('.lbl');
+  if (!lbl) return;
+  const isFolded = !!folded[id];
+  const btn = el('button', { class: 'lbl fold', 'aria-expanded': String(!isFolded), title: isFolded ? 'Show these controls' : 'Hide these controls' },
+    el('span', { class: 'chev', 'aria-hidden': 'true' }, isFolded ? '▸' : '▾'), lbl.textContent);
+  btn.addEventListener('click', () => {
+    folded[id] = !folded[id];
+    saveFolded();
+    root.classList.toggle('folded', !!folded[id]);
+    btn.setAttribute('aria-expanded', String(!folded[id]));
+    btn.querySelector('.chev').textContent = folded[id] ? '▸' : '▾';
+    btn.title = folded[id] ? 'Show these controls' : 'Hide these controls';
+    updateFoldAllButton();
+  });
+  lbl.replaceWith(btn);
+  btn.after(el('span', { class: 'strip-sum' }, summary));
+  root.classList.toggle('folded', isFolded);
+  updateFoldAllButton();
+}
+
+const FOLD_IDS = ['vary', 'wave', 'delay', 'texture', 'dynamics'];
+function updateFoldAllButton() {
+  const b = $('#btn-fold-all');
+  if (!b) return;
+  const allFolded = FOLD_IDS.every((id) => folded[id]);
+  b.textContent = allFolded ? 'Show controls' : 'Hide controls';
+}
+$('#btn-fold-all')?.addEventListener('click', () => {
+  const allFolded = FOLD_IDS.every((id) => folded[id]);
+  for (const id of FOLD_IDS) folded[id] = !allFolded;
+  saveFolded();
+  buildMacros();
+});
 
 // How much each pad's macro knobs wander from the kit's knob settings.
 function buildVaryStrip() {
@@ -607,6 +654,7 @@ function buildVaryStrip() {
     el('div', { class: 'strip-ctl wide', title: 'Each pad gets its own small random nudge on every knob above (brightness, bite, space…). 0 = every pad uses the knobs exactly.' },
       rangeInput({ label: 'Knob variation per pad', min: 0, max: 1, step: 0.01 }, s.macroVariation ?? 0, (v) => { s.macroVariation = v; regenerate(); })),
   );
+  foldable(root, 'vary', `${Math.round((s.macroVariation ?? 0) * 100)}% per pad`);
 }
 
 // Dynamics: compressor and limiter quick controls on one row. Comp mix and
@@ -654,6 +702,7 @@ function buildDynamicsStrip() {
     }, lim.on ? 'Limit on' : 'Limit off'),
     slider('Drive', lim.drive, { min: 0, max: 18, step: 0.5, unit: 'dB' }, 'Push into the limiter: louder and denser, same peak', (p, v) => { p.limiter.drive = v; if (!p.limiter.on) { p.limiter.on = true; } }),
   );
+  foldable(root, 'dynamics', `${mode === 'off' ? 'Comp off' : `${mode === 'glue' ? 'Glue' : 'Stab'} comp ${Math.round(c.amount * 100)}%`} · ${lim.on ? `limit +${lim.drive} dB` : 'limit off'}`);
 }
 
 // Waveform quick controls for Osc 1 (Osc 2 and 3 live in Sound design).
@@ -684,6 +733,7 @@ function buildWaveStrip() {
       })),
     ...(known ? [] : [el('span', { class: 'sub' }, `Osc 1: ${o.on ? o.type : 'off'}`)]),
   );
+  foldable(root, 'wave', o.type === 'morph' ? `Blend ${Math.round((o.shape ?? 0.5) * 100)}%` : (WAVES.find(([v]) => v === o.type)?.[1] ?? o.type));
 }
 
 // Crackle, hiss and air noise, next to the macros.
@@ -703,6 +753,7 @@ function buildTextureStrip() {
     ctl('Hiss', 'texture.hiss', t.hiss, 'Tape hiss'),
     ctl('Air', 'noise.air', base.noise?.air, 'Breathy noise inside the sound, shaped by the filter and envelope'),
   );
+  foldable(root, 'texture', [t.crackle > 0 ? `crackle ${Math.round(t.crackle * 100)}%` : '', t.hiss > 0 ? `hiss ${Math.round(t.hiss * 100)}%` : '', (base.noise?.air ?? 0) > 0 ? `air ${Math.round(base.noise.air * 100)}%` : ''].filter(Boolean).join(' · ') || 'Off');
 }
 
 // ---------------------------------------------------------------- sound design panel
