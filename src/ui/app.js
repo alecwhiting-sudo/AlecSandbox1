@@ -399,6 +399,8 @@ function buildChordPanel() {
     el('div', { class: 'ctl wide', style: 'margin-top:10px' }, el('span', { class: 'lbl' }, 'Notes — click keys to build any chord, however crazy'), keyboard(base.notes)),
     el('div', { class: 'grid2', style: 'margin-top:10px' },
       modeSel, prog,
+      field('Octave', selectInput([-2, -1, 0, 1, 2], s.octave ?? 0, (v) => { s.octave = Number(v); regenerate({ audition: true }); }, ['−2', '−1', '0', '+1', '+2'])),
+      field('Octave spread', selectInput([0, 1, 2], s.octaveRange ?? 0, (v) => { s.octaveRange = Number(v); regenerate(); }, ['Same octave', 'Up to ±1 octave', 'Up to ±2 octaves'])),
       rangeInput({ label: 'Dissonance', min: 0, max: 1, step: 0.01 }, s.dissonance, (v) => { s.dissonance = v; regenerate(); }),
       rangeInput({ label: 'Mutation', min: 0, max: 1, step: 0.01 }, s.mutation, (v) => { s.mutation = v; regenerate(); }),
     ),
@@ -695,7 +697,10 @@ function buildPads() {
     el('div', { class: 'p-top' }, el('span', { class: 'p-chord', title: st.chord.notes.map(noteName).join(' ') }, st.chord.name), el('span', { class: 'p-num' }, PAD_KEYS[i]?.toUpperCase() ?? '')),
     canvas,
     el('div', { class: 'p-top' }, el('span', { class: 'p-tail' }, `${st.info?.tailLabel ?? ''} tail${st.info?.delay ? ` · ${st.info.delay}` : ''}`), el('span', { class: 'p-num', 'data-len': '' }, '')),
-    el('div', { class: 'p-meta' }, st.info?.borrowed ? `+ ${st.info.borrowed.groups.join(', ')} from ${st.info.borrowed.from}` : st.info?.mutated ? `mutated ×${st.info.mutated}` : ''),
+    el('div', { class: 'p-meta' }, [
+      st.info?.octaveShift ? `${st.info.octaveShift > 0 ? '+' : '−'}${Math.abs(st.info.octaveShift)} oct` : '',
+      st.info?.borrowed ? `+ ${st.info.borrowed.groups.join(', ')} from ${st.info.borrowed.from}` : st.info?.mutated ? `mutated ×${st.info.mutated}` : '',
+    ].filter(Boolean).join(' · ')),
     el('div', { class: 'p-actions' },
       el('button', { title: 'Re-roll this pad', onclick: (e) => { e.stopPropagation(); rerollPad(i); } }, '↻'),
       el('button', { title: 'Mutate: small change to chord and tone', onclick: (e) => { e.stopPropagation(); mutatePad(i); } }, '✦'),
@@ -703,7 +708,7 @@ function buildPads() {
       el('button', { title: 'Download WAV', onclick: (e) => { e.stopPropagation(); downloadPad(i); } }, '⬇'),
     ));
     pad.addEventListener('click', () => { select(i); play(i); });
-    pad.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(i); play(i); } });
+    pad.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); select(i); play(i); } });
     pad.addEventListener('mouseenter', () => prepareDrag(i));
     pad.addEventListener('dragstart', (e) => onDragStart(e, i));
     if (!state.renders[st.uid]) pad.classList.add('pending');
@@ -870,21 +875,102 @@ $('#btn-unchop').addEventListener('click', () => {
 let actx = null;
 let current = null;
 let autoAudition = true;
+function ensureAudio() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+
+// The channels you hear for the current audition mode (Mix / Dry / Tail).
+function auditionChannels(p) {
+  return state.audition === 'dry' ? p.dry : state.audition === 'wet' ? p.wet : p.mix;
+}
+
+// Length up to the last audible sample, so silence (e.g. the empty tail of a
+// Dry audition) doesn't stretch the gap in Play all.
+function audibleLength(chs) {
+  let peak = 0;
+  for (const ch of chs) for (let i = 0; i < ch.length; i++) { const a = Math.abs(ch[i]); if (a > peak) peak = a; }
+  const thr = Math.max(peak * 1e-3, 1e-5);
+  for (let i = chs[0].length - 1; i > 0; i--) if (Math.abs(chs[0][i]) > thr || Math.abs(chs[1][i]) > thr) return i + 1;
+  return 1;
+}
+
+function startSource(chs, sr, when = 0) {
+  const ctx = ensureAudio();
+  const buf = ctx.createBuffer(2, chs[0].length, sr);
+  buf.copyToChannel(chs[0], 0); buf.copyToChannel(chs[1], 1);
+  const s = ctx.createBufferSource(); s.buffer = buf;
+  const g = ctx.createGain(); s.connect(g).connect(ctx.destination);
+  s.start(when || 0);
+  return { s, g };
+}
+
+function fadeOut(v) {
+  if (!v) return;
+  try { v.g.gain.setTargetAtTime(0, actx.currentTime, 0.01); v.s.stop(actx.currentTime + 0.05); } catch { /* already stopped */ }
+}
+
+function flashPad(i) {
+  const pad = document.querySelector(`.pad[data-i="${i}"]`);
+  if (pad) { pad.classList.add('flash'); setTimeout(() => pad.classList.remove('flash'), 90); }
+}
+
+function stopPlayback() {
+  fadeOut(current); current = null;
+  if (sequence) {
+    sequence.voices.forEach(fadeOut);
+    sequence.timers.forEach(clearTimeout);
+    sequence = null;
+  }
+  updatePlayAllButton();
+}
+
 function play(i) {
   const p = prepared(i);
   if (!p) return;
-  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-  if (actx.state === 'suspended') actx.resume();
-  const chs = state.audition === 'dry' ? p.dry : state.audition === 'wet' ? p.wet : p.mix;
-  const buf = actx.createBuffer(2, p.length, p.sr);
-  buf.copyToChannel(chs[0], 0); buf.copyToChannel(chs[1], 1);
-  if (current) { try { current.g.gain.setTargetAtTime(0, actx.currentTime, 0.01); current.s.stop(actx.currentTime + 0.05); } catch { /* already stopped */ } }
-  const s = actx.createBufferSource(); s.buffer = buf;
-  const g = actx.createGain(); s.connect(g).connect(actx.destination);
-  s.start();
-  current = { s, g };
-  const pad = document.querySelector(`.pad[data-i="${i}"]`);
-  if (pad) { pad.classList.add('flash'); setTimeout(() => pad.classList.remove('flash'), 90); }
+  stopPlayback();
+  current = startSource(auditionChannels(p), p.sr);
+  flashPad(i);
+}
+
+// Play every pad in order, each starting 150 ms after the previous one ends.
+const PLAY_ALL_GAP = 0.15;
+let sequence = null;
+async function playAll() {
+  if (sequence) { stopPlayback(); return; }
+  const ctx = ensureAudio(); // inside the key/click gesture, before any await
+  sequence = { voices: [], timers: [] };
+  updatePlayAllButton();
+  if (pendingUids.size) $('#status').textContent = 'Waiting for every pad to render…';
+  await allRendered();
+  if (!sequence) return; // stopped while waiting
+  fadeOut(current); current = null;
+  let t = ctx.currentTime + 0.05;
+  const seq = sequence;
+  state.stabs.forEach((st, i) => {
+    const p = prepared(i);
+    if (!p) return;
+    const full = auditionChannels(p);
+    const n = audibleLength(full);
+    const chs = [full[0].subarray(0, n), full[1].subarray(0, n)];
+    seq.voices.push(startSource(chs, p.sr, t));
+    const at = (t - ctx.currentTime) * 1000;
+    seq.timers.push(setTimeout(() => { if (sequence === seq) { select(i); flashPad(i); $('#status').textContent = `Playing ${i + 1}/${state.stabs.length}`; } }, at));
+    t += n / p.sr + PLAY_ALL_GAP;
+  });
+  seq.timers.push(setTimeout(() => {
+    if (sequence !== seq) return;
+    sequence = null; updatePlayAllButton();
+    $('#status').textContent = `${state.stabs.length} stabs ready`;
+  }, (t - ctx.currentTime) * 1000));
+}
+
+function updatePlayAllButton() {
+  const b = $('#btn-play-all');
+  if (!b) return;
+  b.textContent = sequence ? '■ Stop' : '▶ Play all';
+  b.classList.toggle('on', !!sequence);
 }
 
 document.querySelectorAll('#audition button').forEach((b) => b.addEventListener('click', () => {
@@ -893,8 +979,18 @@ document.querySelectorAll('#audition button').forEach((b) => b.addEventListener(
   drawAllPads(); drawWave();
 }));
 
+const isTextField = (t) => !!t.closest('select, textarea, input:not([type=range]):not([type=checkbox]):not([type=file])');
 document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.metaKey || e.ctrlKey || e.altKey || isTextField(e.target)) return;
+  // Space replays the selected pad, Shift+Space plays them all. This takes
+  // priority over buttons, so a focused button isn't clicked again by Space.
+  if (e.code === 'Space' || e.key === ' ') {
+    e.preventDefault();
+    if (e.repeat) return;
+    if (e.shiftKey) playAll(); else play(state.selected);
+    return;
+  }
+  if (e.key === 'Escape') { stopPlayback(); return; }
   const k = e.key.toLowerCase();
   const i = PAD_KEYS.indexOf(k);
   if (i >= 0 && i < state.stabs.length) { select(i); play(i); return; }
@@ -1003,8 +1099,8 @@ function renderFolderButton(st, detail) {
   }
   const hint = $('#drag-hint');
   if (hint) hint.textContent = st === 'linked'
-    ? `click or press 1–8 / Q–I · drag from Ableton's browser: ${folder.name} › ${CURRENT_DIR}`
-    : 'click or press 1–8 / Q–I · drag a pad out, or link an Ableton folder';
+    ? `1–8 / Q–I to play · Space replays · Shift+Space plays all · drag from Ableton's browser: ${folder.name} › ${CURRENT_DIR}`
+    : '1–8 / Q–I to play · Space replays · Shift+Space plays all · drag a pad out, or link an Ableton folder';
 }
 
 function folderHelp() {
@@ -1149,6 +1245,10 @@ $('#file-load').addEventListener('change', async (e) => {
 // ---------------------------------------------------------------- boot
 $('#btn-new').addEventListener('click', newKit);
 $('#btn-reset-sound').addEventListener('click', () => loadPreset(state.settings.presetId));
+$('#btn-trigger').addEventListener('click', () => play(state.selected));
+$('#btn-play-all').addEventListener('click', () => playAll());
+// Stop Space's keyup from activating whichever button has focus.
+document.addEventListener('keyup', (e) => { if ((e.code === 'Space' || e.key === ' ') && !isTextField(e.target)) e.preventDefault(); });
 
 function buildAll() {
   $('#preset-title').textContent = PRESET_BY_ID[state.settings.presetId]?.name ?? 'Character';

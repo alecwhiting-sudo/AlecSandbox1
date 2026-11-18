@@ -33,6 +33,8 @@ export function defaultKitSettings() {
     familySpread: 0.15,
     tailSpread: 0.6,
     delaySpread: 0.6,
+    octave: 0,       // shift every pad by whole octaves (-2..+2)
+    octaveRange: 0,  // 0 = same octave, 1 or 2 = pads spread up/down by that many octaves
     macros: defaultMacros(),
     locks: { chord: false, osc: false, filter: false, env: false, colour: false, space: false },
     basePatch: null, // edited patch; null = use preset
@@ -226,8 +228,9 @@ export function generateKit(settings, previous = null) {
     const prevStab = previous?.[i];
     const unchanged = prevStab && prevStab.seed === seed && prevStab.settingsKey === settingsKey(settings);
     if (unchanged) { stabs.push(prevStab); prevChord = prevStab.chord; continue; }
-    const chord = chordFor(settings, i, rng.fork('chord'), prevChord);
-    prevChord = chord;
+    const baseChord = chordFor(settings, i, rng.fork('chord'), prevChord);
+    prevChord = baseChord; // mutate chains continue from the unshifted chord
+    const { chord, octaveShift } = placeOctave(baseChord, settings, rng.fork('octave'));
     const { patch: fam, borrowed } = borrowFamily(base, rng.fork('family'), settings, settings.familySpread ?? 0);
     let patch = varyPatch(fam, rng.fork('vary'), settings.variation ?? 0, settings.locks);
     if (!settings.locks?.space) {
@@ -251,7 +254,7 @@ export function generateKit(settings, previous = null) {
     stabs.push({
       index: i, seed, chord, patch, tail: tails[i],
       renderSeed: rng.int(1, 2 ** 31 - 1),
-      info: { borrowed, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch) },
+      info: { borrowed, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch), octaveShift },
       settingsKey: settingsKey(settings),
     });
   }
@@ -265,6 +268,20 @@ export function mutateStab(stab, settings, salt) {
     : mutateChord(rng.fork('c'), stab.chord, { strength: Math.max(0.25, settings.mutation), dissonance: settings.dissonance, key: settings.key, scale: settings.scale });
   const patch = varyPatch(stab.patch, rng.fork('p'), Math.max(0.15, (settings.variation ?? 0.3) * 0.6), settings.locks);
   return { ...stab, chord, patch, seed: `${stab.seed}~${salt}`, renderSeed: rng.int(1, 2 ** 31 - 1), info: { ...stab.info, mutated: (stab.info?.mutated ?? 0) + 1 } };
+}
+
+/**
+ * Move a chord by the kit's Octave setting plus a per-pad random shift within
+ * Octave spread, kept inside a playable range (C1..C7).
+ */
+export function placeOctave(chord, settings, rng) {
+  const range = Math.max(0, Math.min(2, Math.round(settings.octaveRange ?? 0)));
+  let oct = Math.round(settings.octave ?? 0) + (range > 0 ? rng.int(-range, range) : 0);
+  const lo = Math.min(...chord.notes), hi = Math.max(...chord.notes);
+  while (hi + oct * 12 > 96 && oct > -4) oct--;
+  while (lo + oct * 12 < 24 && oct < 4) oct++;
+  if (oct === 0) return { chord, octaveShift: 0 };
+  return { chord: { notes: chord.notes.map((n) => n + oct * 12), name: chord.name }, octaveShift: oct };
 }
 
 function delayLabel(p) {

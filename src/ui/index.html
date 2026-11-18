@@ -85,7 +85,11 @@
       <section class="panel" id="panel-sound">
         <div class="panel-head">
           <h2>Sound design <span class="sub">edits the base sound every stab varies from</span></h2>
-          <button id="btn-reset-sound" class="btn small">Reset to preset</button>
+          <div class="row gap">
+            <button id="btn-trigger" class="btn small primary" title="Play the selected stab (Space)">▶ Trigger</button>
+            <button id="btn-play-all" class="btn small" title="Play every pad in turn with a 150 ms gap (Shift+Space)">▶ Play all</button>
+            <button id="btn-reset-sound" class="btn small">Reset to preset</button>
+          </div>
         </div>
         <div id="sound" class="sound"></div>
       </section>

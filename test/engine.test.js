@@ -174,3 +174,19 @@ test('stereo delay can use a separate right-hand time', async () => {
   assert.equal(Math.round(d.dL), 12000);
   assert.equal(Math.round(d.dR), 24000);
 });
+
+test('octave moves every pad; octave spread varies pads within the range', () => {
+  const s = { ...defaultKitSettings(), size: 8, chordMode: 'fixed' };
+  const base = generateKit(s).map((k) => k.chord.notes);
+  const up = generateKit({ ...s, octave: 1 }).map((k) => k.chord.notes);
+  up.forEach((notes, i) => assert.deepEqual(notes, base[i].map((n) => n + 12)));
+  const spread = generateKit({ ...s, octaveRange: 2 });
+  const shifts = new Set(spread.map((k) => k.info.octaveShift));
+  assert.ok(shifts.size >= 2, `shifts ${[...shifts]}`);
+  for (const k of spread) {
+    assert.ok(Math.abs(k.info.octaveShift) <= 2);
+    assert.ok(k.chord.notes.every((n) => n >= 24 && n <= 96));
+  }
+  // Extreme settings stay in range.
+  for (const k of generateKit({ ...s, octave: 2, octaveRange: 2 })) assert.ok(Math.max(...k.chord.notes) <= 96);
+});
