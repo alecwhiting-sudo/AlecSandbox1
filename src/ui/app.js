@@ -691,10 +691,11 @@ function buildPads() {
     const canvas = el('canvas', { height: 38 });
     const held = !!state.held[i];
     const pad = el('div', {
-      class: `pad${i === state.selected ? ' sel' : ''}`, tabindex: '0', draggable: 'true', 'data-i': i,
+      class: `pad${i === state.selected ? ' sel' : ''}${held ? ' held' : ''}`, tabindex: '0', draggable: 'true', 'data-i': i,
       role: 'button', 'aria-label': `Stab ${i + 1}: ${st.chord.name}`,
     },
-    el('div', { class: 'p-top' }, el('span', { class: 'p-chord', title: st.chord.notes.map(noteName).join(' ') }, st.chord.name), el('span', { class: 'p-num' }, PAD_KEYS[i]?.toUpperCase() ?? '')),
+    el('div', { class: 'p-top' }, el('span', { class: 'p-chord', title: st.chord.notes.map(noteName).join(' ') }, st.chord.name),
+      el('span', { class: 'p-badges' }, held ? el('span', { class: 'p-held', title: 'New kit keeps this pad' }, 'Held') : null, el('span', { class: 'p-num' }, PAD_KEYS[i]?.toUpperCase() ?? ''))),
     canvas,
     el('div', { class: 'p-top' }, el('span', { class: 'p-tail' }, `${st.info?.tailLabel ?? ''} tail${st.info?.delay ? ` · ${st.info.delay}` : ''}`), el('span', { class: 'p-num', 'data-len': '' }, '')),
     el('div', { class: 'p-meta' }, [
@@ -702,10 +703,17 @@ function buildPads() {
       st.info?.borrowed ? `+ ${st.info.borrowed.groups.join(', ')} from ${st.info.borrowed.from}` : st.info?.mutated ? `mutated ×${st.info.mutated}` : '',
     ].filter(Boolean).join(' · ')),
     el('div', { class: 'p-actions' },
-      el('button', { title: 'Re-roll this pad', onclick: (e) => { e.stopPropagation(); rerollPad(i); } }, '↻'),
-      el('button', { title: 'Mutate: small change to chord and tone', onclick: (e) => { e.stopPropagation(); mutatePad(i); } }, '✦'),
-      el('button', { class: held ? 'on' : '', title: 'Hold: keep this pad when making a new kit', onclick: (e) => { e.stopPropagation(); holdPad(i); } }, held ? '●' : '○'),
-      el('button', { title: 'Download WAV', onclick: (e) => { e.stopPropagation(); downloadPad(i); } }, '⬇'),
+      el('button', { title: 'Re-roll: replace this pad with a new stab', onclick: (e) => { e.stopPropagation(); rerollPad(i); } }, '↻ Re-roll'),
+      el('button', { title: 'Mutate: nudge this pad\'s chord and tone a little', onclick: (e) => { e.stopPropagation(); mutatePad(i); } }, '✦ Mutate'),
+      el('button', {
+        class: held ? 'on' : '', 'aria-pressed': held ? 'true' : 'false',
+        title: held ? 'Held: New kit keeps this pad. Click to release it.' : 'Hold: keep this pad when you press New kit',
+        onclick: (e) => { e.stopPropagation(); holdPad(i); },
+      }, held ? '● Held' : '○ Hold'),
+      el('button', {
+        title: folder.state === 'linked' ? `Save this WAV to "${KEPT_DIR}" in your linked folder` : 'Download this pad as a WAV',
+        onclick: (e) => { e.stopPropagation(); downloadPad(i); },
+      }, '⬇ Save'),
     ));
     pad.addEventListener('click', () => { select(i); play(i); });
     pad.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); select(i); play(i); } });

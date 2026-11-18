@@ -176,10 +176,13 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .pad .p-chord { font-weight: 650; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pad .p-tail { font-size: 11px; color: var(--accent-2); }
 .pad canvas { width: 100%; height: 38px; display: block; }
-.pad .p-actions { display: flex; gap: 4px; }
+.pad .p-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.pad .p-badges { display: flex; align-items: baseline; gap: 6px; flex: none; }
+.pad .p-held { font-size: 10px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent-dim); border-radius: var(--radius); padding: 0 4px; line-height: 15px; }
+.pad.held { border-color: var(--accent-dim); }
 .pad .p-actions button {
-  flex: 1; background: var(--inset); border: 1px solid var(--line); border-radius: var(--radius); padding: 3px 0;
-  font-size: 13px; cursor: pointer; color: var(--muted);
+  min-width: 0; background: var(--inset); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 2px;
+  font-size: 11px; cursor: pointer; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pad .p-actions button:hover { color: var(--text); border-color: var(--mid-border); }
 .pad .p-actions button.on { color: var(--accent); border-color: var(--accent); }
