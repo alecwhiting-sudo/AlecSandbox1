@@ -3,7 +3,7 @@
 
 import { SCHEMA, MACROS, LOCK_GROUPS, getPath, setPath } from '../engine/patch.js';
 import { PRESETS, PRESET_BY_ID, presetPatch } from '../engine/presets.js';
-import { defaultKitSettings, generateKit, mutateStab, baseChordFor, CHORD_MODES, settingsKey } from '../engine/variation.js';
+import { defaultKitSettings, generateKit, mutateStab, baseChordFor, CHORD_MODES, settingsKey, KEY_CHANGES } from '../engine/variation.js';
 import { CHORD_TYPES, NOTE_NAMES, SCALES, noteName } from '../music/theory.js';
 import { randomChord, mutateChord, VOICINGS, PROGRESSIONS } from '../music/chords.js';
 import { defaultExportSettings, prepareStab, normaliseGains, stabFiles, stabFileBase, kitFolderName, encodeWav, finalLength } from '../engine/export.js';
@@ -402,6 +402,10 @@ function buildChordPanel() {
       modeSel, prog,
       field('Octave', selectInput([-2, -1, 0, 1, 2], s.octave ?? 0, (v) => { s.octave = Number(v); regenerate({ audition: true }); }, ['−2', '−1', '0', '+1', '+2'])),
       field('Octave spread', selectInput([0, 1, 2], s.octaveRange ?? 0, (v) => { s.octaveRange = Number(v); regenerate(); }, ['Same octave', 'Up to ±1 octave', 'Up to ±2 octaves'])),
+      field('Key changes', selectInput(Object.keys(KEY_CHANGES), s.keyChange ?? 'off', (v) => { s.keyChange = v; buildChordPanel(); regenerate({ audition: true }); }, Object.values(KEY_CHANGES).map((k) => k.label)), 'wide'),
+      (s.keyChange ?? 'off') !== 'off'
+        ? field('Change key every', selectInput([1, 2, 4, 8], s.keyEvery ?? 4, (v) => { s.keyEvery = Number(v); regenerate(); }, ['pad', '2 pads', '4 pads', '8 pads']), 'wide')
+        : null,
       rangeInput({ label: 'Dissonance', min: 0, max: 1, step: 0.01 }, s.dissonance, (v) => { s.dissonance = v; regenerate(); }),
       rangeInput({ label: 'Mutation', min: 0, max: 1, step: 0.01 }, s.mutation, (v) => { s.mutation = v; regenerate(); }),
     ),
@@ -701,6 +705,7 @@ function buildPads() {
     canvas,
     el('div', { class: 'p-top' }, el('span', { class: 'p-tail' }, `${st.info?.tailLabel ?? ''} tail${st.info?.delay ? ` · ${st.info.delay}` : ''}`), el('span', { class: 'p-num', 'data-len': '' }, '')),
     el('div', { class: 'p-meta' }, [
+      st.info?.key ? `key ${st.info.key}` : '',
       st.info?.octaveShift ? `${st.info.octaveShift > 0 ? '+' : '−'}${Math.abs(st.info.octaveShift)} oct` : '',
       st.info?.borrowed ? `+ ${st.info.borrowed.groups.join(', ')} from ${st.info.borrowed.from}` : st.info?.mutated ? `mutated ×${st.info.mutated}` : '',
     ].filter(Boolean).join(' · ')),

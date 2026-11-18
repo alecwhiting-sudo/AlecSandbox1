@@ -190,3 +190,21 @@ test('octave moves every pad; octave spread varies pads within the range', () =>
   // Extreme settings stay in range.
   for (const k of generateKit({ ...s, octave: 2, octaveRange: 2 })) assert.ok(Math.max(...k.chord.notes) <= 96);
 });
+
+test('key changes move pad sections into new keys', async () => {
+  const { keyPlan, KEY_CHANGES } = await import('../src/engine/variation.js');
+  const s = { ...defaultKitSettings(), size: 8, chordMode: 'fixed', keyEvery: 2 };
+  assert.deepEqual(keyPlan({ ...s, keyChange: 'off' }), [0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(keyPlan({ ...s, keyChange: 'up-semitone' }), [0, 0, 1, 1, 2, 2, 3, 3]);
+  assert.deepEqual(keyPlan({ ...s, keyChange: 'fifths' }), [0, 0, -5, -5, 2, 2, -3, -3]);
+  assert.deepEqual(keyPlan({ ...s, keyChange: 'there-and-back' }), [0, 0, 5, 5, 0, 0, 5, 5]);
+  for (const id of Object.keys(KEY_CHANGES)) {
+    for (const off of keyPlan({ ...s, keyChange: id })) assert.ok(off >= -5 && off <= 6, `${id}: ${off}`);
+  }
+  // Chords really move: a fixed Am7 kit rising by semitones.
+  const kit = generateKit({ ...s, keyChange: 'up-semitone' });
+  assert.equal(kit[0].chord.name, 'Am7');
+  assert.equal(kit[2].chord.name, 'A#m7');
+  assert.equal(kit[2].info.key, 'A#m');
+  assert.deepEqual(kit[2].chord.notes, kit[0].chord.notes.map((n) => n + 1));
+});

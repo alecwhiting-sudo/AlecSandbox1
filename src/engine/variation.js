@@ -6,7 +6,7 @@ import { clamp, DIVISIONS } from '../dsp/util.js';
 import { clone, applyMacros, applyLocks, LOCK_GROUPS, defaultMacros } from './patch.js';
 import { PRESET_BY_ID, presetPatch, presetsNear } from './presets.js';
 import { buildChord, diatonicChord, randomChord, mutateChord, PROGRESSIONS } from '../music/chords.js';
-import { detectChord } from '../music/theory.js';
+import { detectChord, NOTE_NAMES } from '../music/theory.js';
 
 export const CHORD_MODES = {
   fixed: 'Same chord (timbre variations only)',
@@ -35,6 +35,8 @@ export function defaultKitSettings() {
     delaySpread: 0.6,
     octave: 0,       // shift every pad by whole octaves (-2..+2)
     octaveRange: 0,  // 0 = same octave, 1 or 2 = pads spread up/down by that many octaves
+    keyChange: 'off', // a KEY_CHANGES id: modulate as the kit goes on
+    keyEvery: 4,      // pads per key section
     macros: defaultMacros(),
     locks: { chord: false, osc: false, filter: false, env: false, colour: false, space: false },
     basePatch: null, // edited patch; null = use preset
@@ -220,6 +222,7 @@ export function generateKit(settings, previous = null) {
   const base = basePatchFor(settings);
   const tails = tailPlan(settings);
   const delays = delayPlan(settings, base.delay.division);
+  const keyOffsets = keyPlan(settings);
   const stabs = [];
   let prevChord = null;
   for (let i = 0; i < settings.size; i++) {
@@ -230,7 +233,8 @@ export function generateKit(settings, previous = null) {
     if (unchanged) { stabs.push(prevStab); prevChord = prevStab.chord; continue; }
     const baseChord = chordFor(settings, i, rng.fork('chord'), prevChord);
     prevChord = baseChord; // mutate chains continue from the unshifted chord
-    const { chord, octaveShift } = placeOctave(baseChord, settings, rng.fork('octave'));
+    const keyed = transposeChord(baseChord, keyOffsets[i]);
+    const { chord, octaveShift } = placeOctave(keyed, settings, rng.fork('octave'));
     const { patch: fam, borrowed } = borrowFamily(base, rng.fork('family'), settings, settings.familySpread ?? 0);
     let patch = varyPatch(fam, rng.fork('vary'), settings.variation ?? 0, settings.locks);
     if (!settings.locks?.space) {
@@ -254,7 +258,7 @@ export function generateKit(settings, previous = null) {
     stabs.push({
       index: i, seed, chord, patch, tail: tails[i],
       renderSeed: rng.int(1, 2 ** 31 - 1),
-      info: { borrowed, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch), octaveShift },
+      info: { borrowed, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch), octaveShift, key: keyOffsets[i] !== 0 || settings.keyChange !== 'off' ? keyName(settings, keyOffsets[i]) : '' },
       settingsKey: settingsKey(settings),
     });
   }
@@ -268,6 +272,62 @@ export function mutateStab(stab, settings, salt) {
     : mutateChord(rng.fork('c'), stab.chord, { strength: Math.max(0.25, settings.mutation), dissonance: settings.dissonance, key: settings.key, scale: settings.scale });
   const patch = varyPatch(stab.patch, rng.fork('p'), Math.max(0.15, (settings.variation ?? 0.3) * 0.6), settings.locks);
   return { ...stab, chord, patch, seed: `${stab.seed}~${salt}`, renderSeed: rng.int(1, 2 ** 31 - 1), info: { ...stab.info, mutated: (stab.info?.mutated ?? 0) + 1 } };
+}
+
+// Key changes: each step is the interval (semitones) to the next key section.
+export const KEY_CHANGES = {
+  off: { label: 'Off (one key)', steps: [] },
+  'up-semitone': { label: 'Up a semitone (lift)', steps: [1] },
+  'up-tone': { label: 'Up a whole tone', steps: [2] },
+  fifths: { label: 'Circle of fifths', steps: [7] },
+  fourths: { label: 'Circle of fourths', steps: [5] },
+  'down-minor-third': { label: 'Down a minor third (dub)', steps: [-3] },
+  'up-minor-third': { label: 'Up a minor third (house)', steps: [3] },
+  mediants: { label: 'Chromatic mediants (cinematic)', steps: [4, -4] },
+  'there-and-back': { label: 'Up a fourth and home again', steps: [5, -5] },
+  random: { label: 'Random nice changes', steps: null },
+};
+const NICE_STEPS = [1, 2, 3, -3, 4, -4, 5, -5, 7, -2];
+
+/**
+ * Semitone offset from the kit's key for each pad. Pads are grouped in
+ * sections of keyEvery; each new section moves by the next step. Offsets are
+ * folded into -5..+6 so the kit doesn't climb out of register.
+ */
+export function keyPlan(settings) {
+  const n = settings.size;
+  const kc = KEY_CHANGES[settings.keyChange] ?? KEY_CHANGES.off;
+  if (!kc.steps || kc.steps.length) {
+    const every = Math.max(1, Math.round(settings.keyEvery ?? 4));
+    const rng = new Rng(`${settings.seed}|keys`);
+    const out = [];
+    let offset = 0, section = 0;
+    for (let i = 0; i < n; i++) {
+      const s = Math.floor(i / every);
+      while (section < s) {
+        const step = kc.steps ? kc.steps[section % kc.steps.length] : rng.pick(NICE_STEPS);
+        offset += step;
+        section++;
+      }
+      let f = ((offset % 12) + 12) % 12;
+      if (f > 6) f -= 12;
+      out.push(f);
+    }
+    return out;
+  }
+  return Array(n).fill(0);
+}
+
+export function keyName(settings, offset) {
+  const pc = (((settings.key ?? 0) + offset) % 12 + 12) % 12;
+  const minorish = /minor|dorian|phrygian/.test(settings.scale ?? 'minor');
+  return NOTE_NAMES[pc] + (minorish ? 'm' : '');
+}
+
+function transposeChord(chord, semis) {
+  if (!semis) return chord;
+  const notes = chord.notes.map((n) => n + semis);
+  return { notes, name: detectChord(notes) };
 }
 
 /**
