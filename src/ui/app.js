@@ -913,11 +913,40 @@ $('#btn-unchop').addEventListener('click', () => {
 let actx = null;
 let current = null;
 let autoAudition = true;
+// iPhone/iPad: web audio is treated as "ambient" by default, so the ring/
+// silent switch mutes it. Ask for the media playback channel instead (Safari
+// 16.4+), and on older iOS keep a silent looping <audio> element playing,
+// which moves the page into that channel.
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* not supported */ }
+let mediaKeepAlive = null;
+
 function ensureAudio() {
   if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-  if (actx.state === 'suspended') actx.resume();
+  // 'suspended' before the first tap; 'interrupted' after a call or Siri on iOS.
+  if (actx.state !== 'running') actx.resume().catch(() => {});
   return actx;
 }
+
+// Called on the first touch/click/key (and again until audio is running):
+// iOS only lets audio start inside a user gesture.
+function unlockAudio() {
+  const ctx = ensureAudio();
+  if (ctx.state === 'running' && (mediaKeepAlive || !isIOS)) return;
+  try {
+    const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0);
+  } catch { /* ignore */ }
+  if (isIOS && !mediaKeepAlive && !navigator.audioSession) {
+    const wav = encodeWav([new Float32Array(4410)], 44100, 16);
+    mediaKeepAlive = new Audio(URL.createObjectURL(new Blob([wav], { type: 'audio/wav' })));
+    mediaKeepAlive.loop = true;
+    mediaKeepAlive.setAttribute('playsinline', '');
+    mediaKeepAlive.play().catch(() => { mediaKeepAlive = null; });
+  }
+}
+for (const ev of ['pointerdown', 'touchend', 'keydown', 'click']) document.addEventListener(ev, unlockAudio, { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && actx && actx.state !== 'running') actx.resume().catch(() => {}); });
 
 // The channels you hear for the current audition mode (Mix / Dry / Tail).
 function auditionChannels(p) {
