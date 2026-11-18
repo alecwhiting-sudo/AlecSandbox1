@@ -23,6 +23,7 @@ export function defaultPatch() {
     sub: { level: 0.2, octave: -1, wave: 'sine' },
     noise: { level: 0.08, decay: 0.015, colour: 0.7, air: 0, airColour: 0.7 },
     texture: { crackle: 0, density: 0.4, tone: 0.5, hiss: 0, follow: 0.6 },
+    comp: { amount: 0.3, mode: 'stab', ratio: 4, attack: 0.012, release: 0.15, mix: 1 },
     drift: 3, driftRate: 0.6,
     pitchEnv: { amount: 0, decay: 0.03 },
     amp: { a: 0.002, d: 0.35, s: 0.25, r: 0.25, curve: 0.6, attackCurve: 0.3 },
@@ -80,7 +81,7 @@ export const LOCK_GROUPS = {
   osc: { label: 'Oscillators', keys: ['osc', 'sub', 'noise', 'drift', 'driftRate'] },
   filter: { label: 'Filters', keys: ['filterA', 'filterB', 'routing', 'follower'] },
   env: { label: 'Envelopes', keys: ['amp', 'fenv', 'pitchEnv', 'gate', 'strum', 'strumDir', 'velocity'] },
-  colour: { label: 'Colour', keys: ['colour', 'transient', 'chorus', 'eq', 'width', 'voiceSpread', 'level', 'texture'] },
+  colour: { label: 'Colour', keys: ['colour', 'transient', 'chorus', 'eq', 'width', 'voiceSpread', 'level', 'texture', 'comp'] },
   space: { label: 'Space', keys: ['delay', 'reverb', 'delayToReverb', 'duck', 'sidechain'] },
 };
 
@@ -264,6 +265,16 @@ export const SCHEMA = [
       r('chorus.mix', 'Chorus mix', 0, 1, 0.01),
       r('chorus.rate', 'Chorus rate', 0, 1, 0.01),
       r('chorus.depth', 'Chorus depth', 0, 1, 0.01),
+    ],
+  },
+  {
+    id: 'comp', label: 'Compressor', lock: 'colour', params: [
+      r('comp.amount', 'Amount', 0, 1, 0.01),
+      sel('comp.mode', 'Mode', ['stab', 'glue'], ['Stab (before delay/reverb)', 'Glue (stab + tails)']),
+      r('comp.ratio', 'Ratio', 1, 20, 0.5, { unit: ':1', scale: 'log' }),
+      r('comp.attack', 'Attack', 0.0002, 0.3, 0.0001, { unit: 's', scale: 'log' }),
+      r('comp.release', 'Release', 0.01, 2, 0.01, { unit: 's', scale: 'log' }),
+      r('comp.mix', 'Mix (parallel)', 0, 1, 0.01),
     ],
   },
   {

@@ -333,7 +333,7 @@ function loadPreset(id) {
   const pr = PRESET_BY_ID[id];
   if (pr?.chord && !s.customNotes) Object.assign(s.chord, pr.chord);
   $('#preset-title').textContent = pr?.name ?? 'Character';
-  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip();
+  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip(); buildCompStrip();
   regenerate({ audition: true });
 }
 
@@ -563,6 +563,7 @@ function buildMacros() {
   })));
   buildDelayStrip();
   buildTextureStrip();
+  buildCompStrip();
 }
 
 // Quick delay controls next to the macros (edit the base sound).
@@ -591,6 +592,34 @@ function buildDelayStrip() {
       rangeInput({ label: d.mode === 'tape' ? 'Tape grit' : 'Grit', min: 0, max: 1, step: 0.01 }, d.grit ?? 0.4, (v) => {
         const p = editablePatch(); p.delay.grit = v; markEdited(); regenerate({ audition: true });
       })),
+  );
+}
+
+// Compressor quick controls, next to the macros.
+function buildCompStrip() {
+  const root = $('#comp-strip');
+  if (!root) return;
+  const c = currentBase().comp ?? { amount: 0, mode: 'stab', attack: 0.012, release: 0.15, mix: 1 };
+  const mode = c.amount <= 0 ? 'off' : c.mode;
+  const set = (fn) => { const p = editablePatch(); p.comp = p.comp ?? { amount: 0.3, mode: 'stab', ratio: 4, attack: 0.012, release: 0.15, mix: 1 }; fn(p.comp); markEdited(); buildSoundPanel(); buildCompStrip(); regenerate({ audition: true }); };
+  const slider = (label, key, prm, hint) => el('div', { class: 'strip-ctl wide', title: hint },
+    rangeInput({ label, ...prm }, c[key], (v) => { const p = editablePatch(); p.comp[key] = v; markEdited(); regenerate({ audition: true }); }));
+  root.replaceChildren(
+    el('span', { class: 'lbl' }, 'Comp'),
+    el('div', { class: 'seg', role: 'group', 'aria-label': 'Compressor mode' },
+      ...[['stab', 'Stab'], ['glue', 'Glue'], ['off', 'Off']].map(([v, label]) =>
+        el('button', {
+          class: mode === v ? 'on' : '',
+          title: v === 'stab' ? 'Compress the hit before it feeds the delay and reverb' : v === 'glue' ? 'Compress the stab and its tails together, so the tails pump around the hit' : 'No compression',
+          onclick: () => set((x) => {
+            if (v === 'off') { if (x.amount > 0) x.lastAmount = x.amount; x.amount = 0; }
+            else { x.mode = v; if (x.amount <= 0) x.amount = x.lastAmount || 0.3; }
+          }),
+        }, label))),
+    slider('Amount', 'amount', { min: 0, max: 1, step: 0.01 }, 'How hard it squeezes'),
+    slider('Attack', 'attack', { min: 0.0002, max: 0.3, step: 0.0001, scale: 'log', unit: 's' }, 'Slower attack lets the transient punch through'),
+    slider('Release', 'release', { min: 0.01, max: 2, step: 0.01, scale: 'log', unit: 's' }, 'How fast it lets go; longer pumps less'),
+    slider('Mix', 'mix', { min: 0, max: 1, step: 0.01 }, 'Parallel blend of compressed and uncompressed'),
   );
 }
 
@@ -643,6 +672,7 @@ function buildSoundPanel() {
         if (prm.path.endsWith('.type') && sec.id.startsWith('osc')) buildSoundPanel();
         if (prm.path.startsWith('delay.')) buildDelayStrip();
         if (prm.path.startsWith('texture.') || prm.path === 'noise.air') buildTextureStrip();
+        if (prm.path.startsWith('comp.')) buildCompStrip();
         regenerate({ audition: true });
       };
       if (prm.kind === 'range') grid.append(rangeInput(prm, value, onChange));

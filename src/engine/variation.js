@@ -108,6 +108,7 @@ export function varyPatch(patch, rng, amount, locks = {}) {
     p.chorus.rate = clamp(p.chorus.rate + rng.bipolar() * v * 0.2, 0, 1);
     p.eq.tilt = clamp(p.eq.tilt + rng.bipolar() * v * 0.15, -1, 1);
     p.voiceSpread = clamp(p.voiceSpread + rng.bipolar() * v * 0.3, 0, 1);
+    if (p.comp) p.comp.amount = clamp(p.comp.amount + rng.bipolar() * v * 0.1, 0, 1);
     if (p.texture) {
       p.texture.density = clamp(p.texture.density + rng.bipolar() * v * 0.2, 0, 1);
       p.texture.tone = clamp(p.texture.tone + rng.bipolar() * v * 0.2, 0, 1);

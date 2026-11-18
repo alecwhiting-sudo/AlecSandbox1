@@ -11,6 +11,7 @@ import { Saturator, TransientShaper, Chorus, OutputEQ } from './colour.js';
 import { StereoDelay } from './delay.js';
 import { Reverb } from './reverb.js';
 import { Texture } from './texture.js';
+import { Compressor } from './compressor.js';
 
 const CTRL = 16; // control-rate interval in samples
 
@@ -178,6 +179,7 @@ export function renderStab(patch, notes, opts = {}) {
   const eq = new OutputEQ(sr, patch.eq);
   const delay = hasDelay ? new StereoDelay(sr, bpm, patch.delay, rng.fork('delay')) : null;
   const texture = new Texture(sr, rng.fork('texture'), patch.texture ?? {});
+  const comp = new Compressor(sr, patch.comp ?? {});
   const reverb = hasVerb ? new Reverb(sr, patch.reverb) : null;
   const duckF = new EnvelopeFollower(sr, 0.005, patch.duck?.release ?? 0.25);
   const duckAmt = clamp(patch.duck?.amount ?? 0, 0, 1);
@@ -221,6 +223,8 @@ export function renderStab(patch, notes, opts = {}) {
       l = dcL.process(eq.l); r = dcR.process(eq.r);
       const mid = (l + r) * 0.5, side = (l - r) * 0.5 * width;
       l = mid + side; r = mid - side;
+      // Stab compression: shapes the hit before it feeds the delay and reverb.
+      if (comp.active && comp.mode === 'stab') { const g = comp.compute(l, r); l *= g; r *= g; }
 
       let wl = 0, wr = 0;
       if (delay) { delay.process(l * dSend, r * dSend); wl += delay.l; wr += delay.r; }
@@ -233,6 +237,12 @@ export function renderStab(patch, notes, opts = {}) {
         const f = duckF.process((Math.abs(l) + Math.abs(r)) * 0.5);
         const g = 1 - duckAmt * clamp(f * 4, 0, 1);
         wl *= g; wr *= g;
+      }
+      // Glue compression: the stab and its tails squeezed together. One gain
+      // for both stems, so dry + tail still add up to the mix.
+      if (comp.active && comp.mode === 'glue') {
+        const g = comp.compute(l + wl, r + wr);
+        l *= g; r *= g; wl *= g; wr *= g;
       }
       if (sc) {
         const g = 1 - scAmt * scv;
