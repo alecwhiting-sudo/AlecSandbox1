@@ -5,6 +5,13 @@ the [RatMode](https://www.divurj.com/ratmode) family and uses RatMode's look:
 flat greys, one acid-orange accent, and recessed knobs drawn like RatMode's
 own knob painter (`Source/UI/UIConstants.h` in the RatMode repo).
 
+**Labs marks.** Stab Lab has its own logo, part of a family for future Labs
+(Kick Lab, Hat Lab, Snare Lab…). It uses RatMode's circuit-trace style (orange
+traces and solder pads on a dark grid) inside a hexagon frame, where RatMode
+uses a diamond. Only the glyph inside changes per Lab. Glyphs are defined in
+`src/ui/labmark.js`; `node scripts/export-marks.mjs` writes them all to
+`brand/*-lab.svg`. To add a Lab, add one entry to `LAB_GLYPHS`.
+
 You pick a character (analogue to digital), a key and a tempo. It builds 4–16
 related stabs with subtle tone and timbre variation, different chords, and
 different reverb/delay tails. You can audition them, chop the tails, and

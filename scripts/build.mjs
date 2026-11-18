@@ -26,6 +26,10 @@ const js = app.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const css = readFileSync(join(root, 'src/ui/style.css'), 'utf8');
 
 let html = readFileSync(join(root, 'src/ui/index.html'), 'utf8');
+// Lab mark (see src/ui/labmark.js) in the header and as the favicon.
+const { labMark, labMarkDataUri } = await import('../src/ui/labmark.js');
+html = html.replace('<!--LAB_MARK-->', () => labMark('stab', { size: 34 }).replace('<svg ', '<svg class="logo" '));
+html = html.replace('%LAB_FAVICON%', () => labMarkDataUri('stab'));
 html = html.replace('<link rel="stylesheet" href="./style.css">', () => `<style>\n${css}</style>`);
 html = html.replace('<script type="module" src="./app.js"></script>', () => `<script>\n${js}</script>`);
 writeFileSync(join(out, 'index.html'), html);
