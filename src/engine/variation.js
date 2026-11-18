@@ -69,6 +69,7 @@ export function varyPatch(patch, rng, amount, locks = {}) {
       o.fine = clamp(o.fine + rng.bipolar() * v * 8, -50, 50);
       o.detune = clamp(o.detune * vmul(rng, v, 0.5), 0, 100);
       o.pw = clamp(o.pw + rng.bipolar() * v * 0.15, 0.05, 0.95);
+      if (o.type === 'morph') o.shape = clamp((o.shape ?? 0.5) + rng.bipolar() * v * 0.12, 0, 1);
       o.fmIndex = clamp(o.fmIndex * vmul(rng, v, 0.6), 0, 12);
       o.fmDecay = clamp(o.fmDecay * vmul(rng, v, 0.6), 0.005, 2);
       o.pd = clamp(o.pd + rng.bipolar() * v * 0.2, 0, 1);

@@ -333,7 +333,7 @@ function loadPreset(id) {
   const pr = PRESET_BY_ID[id];
   if (pr?.chord && !s.customNotes) Object.assign(s.chord, pr.chord);
   $('#preset-title').textContent = pr?.name ?? 'Character';
-  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip(); buildCompStrip(); buildLimitStrip();
+  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip(); buildCompStrip(); buildLimitStrip(); buildWaveStrip();
   regenerate({ audition: true });
 }
 
@@ -565,6 +565,7 @@ function buildMacros() {
   buildTextureStrip();
   buildCompStrip();
   buildLimitStrip();
+  buildWaveStrip();
 }
 
 // Quick delay controls next to the macros (edit the base sound).
@@ -621,6 +622,36 @@ function buildCompStrip() {
     slider('Attack', 'attack', { min: 0.0002, max: 0.3, step: 0.0001, scale: 'log', unit: 's' }, 'Slower attack lets the transient punch through'),
     slider('Release', 'release', { min: 0.01, max: 2, step: 0.01, scale: 'log', unit: 's' }, 'How fast it lets go; longer pumps less'),
     slider('Mix', 'mix', { min: 0, max: 1, step: 0.01 }, 'Parallel blend of compressed and uncompressed'),
+  );
+}
+
+// Waveform quick controls for Osc 1 (Osc 2 and 3 live in Sound design).
+const WAVES = [['saw', 'Saw'], ['pulse', 'Square'], ['tri', 'Triangle'], ['morph', 'Blend']];
+function buildWaveStrip() {
+  const root = $('#wave-strip');
+  if (!root) return;
+  const o = currentBase().osc[0];
+  const type = o.on ? o.type : '';
+  const set = (fn) => { const p = editablePatch(); fn(p.osc[0]); p.osc[0].on = true; markEdited(); buildSoundPanel(); buildWaveStrip(); regenerate({ audition: true }); };
+  const known = WAVES.some(([v]) => v === type);
+  root.replaceChildren(
+    el('span', { class: 'lbl', title: 'Main oscillator (Osc 1). Other layers are in Sound design.' }, 'Wave'),
+    el('div', { class: 'seg', role: 'group', 'aria-label': 'Osc 1 waveform' },
+      ...WAVES.map(([v, label]) => el('button', {
+        class: type === v ? 'on' : '',
+        title: v === 'morph' ? 'Blend: slide from triangle through saw to square' : `${label} wave`,
+        onclick: () => set((x) => { x.type = v; if (v === 'pulse') x.pw = 0.5; }),
+      }, label))),
+    el('div', { class: 'strip-ctl wide', title: 'Triangle (left) › Saw (middle) › Square (right). Moving it switches Osc 1 to Blend.' },
+      rangeInput({ label: 'Blend  tri › saw › square', min: 0, max: 1, step: 0.01 }, o.type === 'morph' ? (o.shape ?? 0.5) : o.type === 'tri' ? 0 : o.type === 'pulse' ? 1 : 0.5, (v) => {
+        const p = editablePatch();
+        const was = p.osc[0].type;
+        p.osc[0].type = 'morph'; p.osc[0].on = true; p.osc[0].shape = v;
+        markEdited();
+        if (was !== 'morph') { buildSoundPanel(); root.querySelectorAll('.seg button').forEach((b, i) => b.classList.toggle('on', WAVES[i][0] === 'morph')); }
+        regenerate({ audition: true });
+      })),
+    ...(known ? [] : [el('span', { class: 'sub' }, `Osc 1: ${o.on ? o.type : 'off'}`)]),
   );
 }
 
@@ -693,6 +724,7 @@ function buildSoundPanel() {
         if (prm.path.startsWith('texture.') || prm.path === 'noise.air') buildTextureStrip();
         if (prm.path.startsWith('comp.')) buildCompStrip();
         if (prm.path.startsWith('limiter.')) buildLimitStrip();
+        if (prm.path.startsWith('osc.0.')) buildWaveStrip();
         regenerate({ audition: true });
       };
       if (prm.kind === 'range') grid.append(rangeInput(prm, value, onChange));

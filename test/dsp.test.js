@@ -136,3 +136,22 @@ test('saturation modes are bounded', () => {
     }
   }
 });
+
+test('blend oscillator: triangle at 0, saw at 0.5, square at 1', () => {
+  const rng = new Rng(1);
+  const grab = (shape, type = 'morph') => {
+    const o = new Oscillator(SR, { type, shape, phaseRand: 0, pw: 0.5 }, 100, rng);
+    const out = [];
+    for (let i = 0; i < SR / 50; i++) { o.process(1); out.push(o.l); }
+    return out;
+  };
+  const corr = (a, b) => {
+    let ab = 0, aa = 0, bb = 0;
+    for (let i = 0; i < a.length; i++) { ab += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i]; }
+    return ab / Math.sqrt(aa * bb);
+  };
+  assert.ok(corr(grab(0), grab(0, 'tri')) > 0.99);
+  assert.ok(corr(grab(0.5), grab(0, 'saw')) > 0.99);
+  assert.ok(corr(grab(1), grab(0, 'pulse')) > 0.99);
+  for (const sh of [0.25, 0.75]) for (const v of grab(sh)) assert.ok(Number.isFinite(v) && Math.abs(v) < 1.5);
+});

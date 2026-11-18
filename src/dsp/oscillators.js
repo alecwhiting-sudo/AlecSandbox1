@@ -15,7 +15,7 @@ function blep(t, dt) {
 
 const ORGAN_RATIOS = [0.5, 1.5, 1, 2, 3, 4, 5, 6, 8];
 
-export const OSC_TYPES = ['saw', 'pulse', 'tri', 'sine', 'supersaw', 'fm', 'pd', 'reso', 'organ'];
+export const OSC_TYPES = ['saw', 'pulse', 'tri', 'morph', 'sine', 'supersaw', 'fm', 'pd', 'reso', 'organ'];
 
 export class Oscillator {
   /**
@@ -94,6 +94,25 @@ export class Oscillator {
       case 'tri': {
         const t = this.phase;
         out = 1 - 4 * Math.abs(t - 0.5);
+        this.phase = t + dt; if (this.phase >= 1) this.phase -= 1;
+        break;
+      }
+      case 'morph': {
+        // Blend: shape 0 = triangle, 0.5 = saw, 1 = square, crossfading in
+        // between. Saw and square are band-limited; the square is scaled to
+        // roughly match the others' loudness.
+        const t = this.phase;
+        const sh = clamp(p.shape ?? 0.5, 0, 1);
+        const saw = 2 * t - 1 - blep(t, dt);
+        if (sh <= 0.5) {
+          const tri = 1 - 4 * Math.abs(t - 0.5);
+          const k = sh * 2;
+          out = tri * (1 - k) + saw * k;
+        } else {
+          const sq = ((t < 0.5 ? 1 : -1) + blep(t, dt) - blep((t + 0.5) % 1, dt)) * 0.72;
+          const k = (sh - 0.5) * 2;
+          out = saw * (1 - k) + sq * k;
+        }
         this.phase = t + dt; if (this.phase >= 1) this.phase -= 1;
         break;
       }

@@ -10,7 +10,7 @@ import { DIVISIONS, clamp } from '../dsp/util.js';
 
 const layer = (o = {}) => ({
   on: false, type: 'saw', level: 0.6, octave: 0, semi: 0, fine: 0,
-  pw: 0.5, unison: 7, detune: 25, spread: 0.8,
+  pw: 0.5, shape: 0.5, unison: 7, detune: 25, spread: 0.8,
   fmRatio: 2, fmIndex: 3, fmDecay: 0.3, fmSustain: 0.15, fmFeedback: 0,
   pd: 0.8, pdDecay: 0.4, drawbars: [8, 0, 8, 6, 0, 4, 0, 0, 2], perc: 0,
   phaseRand: 1, ...o,
@@ -176,6 +176,7 @@ const oscParams = (i) => [
   r(`osc.${i}.semi`, 'Semi', -12, 12, 1),
   r(`osc.${i}.fine`, 'Fine', -50, 50, 1, { unit: 'ct' }),
   r(`osc.${i}.pw`, 'Pulse width', 0.05, 0.95, 0.01, { show: ['pulse'] }),
+  r(`osc.${i}.shape`, 'Shape (tri › saw › square)', 0, 1, 0.01, { show: ['morph'] }),
   r(`osc.${i}.unison`, 'Unison', 1, 9, 1, { show: ['supersaw'] }),
   r(`osc.${i}.detune`, 'Detune', 0, 100, 1, { unit: 'ct', show: ['supersaw'] }),
   r(`osc.${i}.spread`, 'Stereo', 0, 1, 0.01, { show: ['supersaw'] }),
