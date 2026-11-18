@@ -3,7 +3,7 @@
 
 import { Rng } from '../dsp/rng.js';
 import { clamp, DIVISIONS } from '../dsp/util.js';
-import { clone, applyMacros, applyLocks, LOCK_GROUPS, defaultMacros } from './patch.js';
+import { clone, applyMacros, applyLocks, LOCK_GROUPS, defaultMacros, MACROS } from './patch.js';
 import { PRESET_BY_ID, presetPatch, presetsNear } from './presets.js';
 import { buildChord, diatonicChord, randomChord, mutateChord, PROGRESSIONS } from '../music/chords.js';
 import { detectChord, NOTE_NAMES } from '../music/theory.js';
@@ -33,6 +33,7 @@ export function defaultKitSettings() {
     familySpread: 0.15,
     tailSpread: 0.6,
     delaySpread: 0.6,
+    macroVariation: 0.3, // per-pad random nudge on every macro knob (0 = identical)
     octave: 0,       // shift every pad by whole octaves (-2..+2)
     octaveRange: 0,  // 0 = same octave, 1 or 2 = pads spread up/down by that many octaves
     keyChange: 'off', // a KEY_CHANGES id: modulate as the kit goes on
@@ -44,9 +45,31 @@ export function defaultKitSettings() {
   };
 }
 
+function rawPatchFor(settings) {
+  return settings.basePatch ? clone(settings.basePatch) : presetPatch(settings.presetId);
+}
+
 export function basePatchFor(settings) {
-  const p = settings.basePatch ? clone(settings.basePatch) : presetPatch(settings.presetId);
-  return applyMacros(p, settings.macros ?? defaultMacros());
+  return applyMacros(rawPatchFor(settings), settings.macros ?? defaultMacros());
+}
+
+// How strongly each macro wanders per pad, relative to the others.
+// Brightness gets a little extra: it's the one you hear first.
+const MACRO_JITTER_WEIGHT = { bright: 1.2, bite: 1, body: 0.8, move: 1, grit: 0.8, space: 0.9, width: 0.7 };
+
+/**
+ * Per-pad macro values: the kit's knobs plus a seeded random nudge whose size
+ * is set by settings.macroVariation (0..1; 1 = about ±0.18 knob travel, 1 sd).
+ */
+export function padMacros(settings, rng) {
+  const m = settings.macros ?? defaultMacros();
+  const amt = clamp(settings.macroVariation ?? 0, 0, 1);
+  const out = {};
+  for (const { id } of MACROS) {
+    const base = m[id] ?? 0.5;
+    out[id] = amt > 0 ? clamp(base + rng.gauss() * amt * 0.18 * (MACRO_JITTER_WEIGHT[id] ?? 1), 0, 1) : base;
+  }
+  return out;
 }
 
 export function baseChordFor(settings) {
@@ -237,7 +260,13 @@ export function generateKit(settings, previous = null) {
     prevChord = baseChord; // mutate chains continue from the unshifted chord
     const keyed = transposeChord(baseChord, keyOffsets[i]);
     const { chord, octaveShift } = placeOctave(keyed, settings, rng.fork('octave'));
-    const { patch: fam, borrowed } = borrowFamily(base, rng.fork('family'), settings, settings.familySpread ?? 0);
+    // Each pad's own take on the macro knobs; locked groups keep the kit's values.
+    let padBase = base, macros = settings.macros ?? defaultMacros();
+    if ((settings.macroVariation ?? 0) > 0) {
+      macros = padMacros(settings, rng.fork('macros'));
+      padBase = applyLocks(applyMacros(rawPatchFor(settings), macros), base, settings.locks);
+    }
+    const { patch: fam, borrowed } = borrowFamily(padBase, rng.fork('family'), settings, settings.familySpread ?? 0);
     let patch = varyPatch(fam, rng.fork('vary'), settings.variation ?? 0, settings.locks);
     if (!settings.locks?.space) {
       patch = applyTail(patch, tails[i]);
@@ -260,7 +289,7 @@ export function generateKit(settings, previous = null) {
     stabs.push({
       index: i, seed, chord, patch, tail: tails[i],
       renderSeed: rng.int(1, 2 ** 31 - 1),
-      info: { borrowed, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch), octaveShift, key: keyOffsets[i] !== 0 || settings.keyChange !== 'off' ? keyName(settings, keyOffsets[i]) : '' },
+      info: { borrowed, macros, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch), octaveShift, key: keyOffsets[i] !== 0 || settings.keyChange !== 'off' ? keyName(settings, keyOffsets[i]) : '' },
       settingsKey: settingsKey(settings),
     });
   }

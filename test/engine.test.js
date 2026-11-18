@@ -208,3 +208,14 @@ test('key changes move pad sections into new keys', async () => {
   assert.equal(kit[2].info.key, 'A#m');
   assert.deepEqual(kit[2].chord.notes, kit[0].chord.notes.map((n) => n + 1));
 });
+
+test('knob variation nudges each pad; 0 keeps them identical; locks win', () => {
+  const s = { ...defaultKitSettings(), size: 8, variation: 0, familySpread: 0, tailSpread: 0, delaySpread: 0 };
+  const cut = (kit) => kit.map((k) => Math.round(k.patch.filterA.cutoff));
+  assert.equal(new Set(cut(generateKit({ ...s, macroVariation: 0 }))).size, 1);
+  const varied = generateKit({ ...s, macroVariation: 0.5 });
+  assert.ok(new Set(cut(varied)).size >= 6, `cutoffs ${cut(varied)}`);
+  assert.ok(new Set(varied.map((k) => k.patch.reverb.send.toFixed(4))).size >= 4, 'space varies too');
+  const locked = generateKit({ ...s, macroVariation: 0.5, locks: { ...s.locks, filter: true } });
+  assert.equal(new Set(cut(locked)).size, 1);
+});

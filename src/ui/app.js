@@ -565,6 +565,7 @@ function buildMacros() {
   buildTextureStrip();
   buildDynamicsStrip();
   buildWaveStrip();
+  buildVaryStrip();
 }
 
 // Quick delay controls next to the macros (edit the base sound).
@@ -593,6 +594,18 @@ function buildDelayStrip() {
       rangeInput({ label: d.mode === 'tape' ? 'Tape grit' : 'Grit', min: 0, max: 1, step: 0.01 }, d.grit ?? 0.4, (v) => {
         const p = editablePatch(); p.delay.grit = v; markEdited(); regenerate({ audition: true });
       })),
+  );
+}
+
+// How much each pad's macro knobs wander from the kit's knob settings.
+function buildVaryStrip() {
+  const root = $('#vary-strip');
+  if (!root) return;
+  const s = state.settings;
+  root.replaceChildren(
+    el('span', { class: 'lbl' }, 'Vary'),
+    el('div', { class: 'strip-ctl wide', title: 'Each pad gets its own small random nudge on every knob above (brightness, bite, space…). 0 = every pad uses the knobs exactly.' },
+      rangeInput({ label: 'Knob variation per pad', min: 0, max: 1, step: 0.01 }, s.macroVariation ?? 0, (v) => { s.macroVariation = v; regenerate(); })),
   );
 }
 
@@ -778,7 +791,7 @@ function buildPads() {
     const held = !!state.held[i];
     const pad = el('div', {
       class: `pad${i === state.selected ? ' sel' : ''}${held ? ' held' : ''}`, tabindex: '0', draggable: 'true', 'data-i': i,
-      role: 'button', 'aria-label': `Stab ${i + 1}: ${st.chord.name}`,
+      role: 'button', 'aria-label': `Stab ${i + 1}: ${st.chord.name}`, title: padKnobSummary(st),
     },
     el('div', { class: 'p-top' }, el('span', { class: 'p-chord', title: st.chord.notes.map(noteName).join(' ') }, st.chord.name),
       el('span', { class: 'p-badges' }, state.reversed[st.uid] ? el('span', { class: 'p-held', title: 'This pad plays backwards' }, 'Rev') : null,
@@ -811,6 +824,18 @@ function buildPads() {
     root.append(pad);
     drawPad(i);
   });
+}
+
+// Tooltip: how this pad's knobs differ from the kit's.
+function padKnobSummary(st) {
+  const m = st.info?.macros;
+  if (!m) return '';
+  const k = state.settings.macros;
+  const parts = MACROS.map(({ id, label }) => {
+    const d = Math.round(((m[id] ?? 0.5) - (k[id] ?? 0.5)) * 200);
+    return d ? `${label} ${d > 0 ? '+' : ''}${d}` : null;
+  }).filter(Boolean);
+  return parts.length ? `This pad's knobs vs the kit: ${parts.join(', ')}` : '';
 }
 
 function drawAllPads() { state.stabs.forEach((_, i) => drawPad(i)); }
