@@ -301,6 +301,7 @@ function buildKitPanel() {
   const root = $('#kit-controls');
   root.replaceChildren();
   root.append(
+    ...kitStyleSwitches(),
     field('Character', selectInput(presetOptions(), s.basePatch ? '__edited' : s.presetId, (v) => {
       if (v === '__edited') return;
       loadPreset(v);
@@ -323,16 +324,37 @@ function buildKitPanel() {
     rangeInput({ label: 'Family spread', min: 0, max: 1, step: 0.01 }, s.familySpread, (v) => { s.familySpread = v; regenerate(); }),
     rangeInput({ label: 'Tail spread', min: 0, max: 1, step: 0.01 }, s.tailSpread, (v) => { s.tailSpread = v; regenerate(); }),
     rangeInput({ label: 'Delay time spread', min: 0, max: 1, step: 0.01 }, s.delaySpread ?? 0, (v) => { s.delaySpread = v; regenerate(); }, 'wide'),
-    field('Sounds across the kit', selectInput(['variations', 'mixed'], s.soundMode ?? 'variations', (v) => { s.soundMode = v; regenerate({ audition: true }); },
-      ['Variations of this character', 'A different character per pad']), 'wide'),
-    el('div', { class: 'ctl wide' }, el('button', {
-      class: 'btn small', title: 'Every pad plays the same chord, each with a different sound',
-      onclick: () => {
-        s.chordMode = 'fixed'; s.soundMode = 'mixed';
-        buildKitPanel(); buildChordPanel(); regenerate({ immediate: true, audition: true });
-      },
-    }, 'Same chord, different sounds')),
   );
+}
+
+// Two plain switches for what changes from pad to pad. All four combinations
+// work; "Changes" + "One character" is the original behaviour.
+function kitStyleSwitches() {
+  const s = state.settings;
+  const seg = (label, aria, options, current, onPick) => el('div', { class: 'ctl wide' },
+    el('span', { class: 'lbl' }, label),
+    el('div', { class: 'seg seg-fill', role: 'group', 'aria-label': aria },
+      ...options.map(([v, text, hint]) => el('button', {
+        class: current === v ? 'on' : '', title: hint, 'aria-pressed': String(current === v),
+        onclick: () => { if (current !== v) onPick(v); },
+      }, text))));
+  const chordSame = s.chordMode === 'fixed';
+  return [
+    seg('Chord per pad', 'Chord per pad', [
+      ['changes', 'Changes', 'Each pad gets its own chord (how, is set by "Across the kit" in Chords)'],
+      ['same', 'Same', 'Every pad plays the same chord'],
+    ], chordSame ? 'same' : 'changes', (v) => {
+      if (v === 'same') { s.lastChordMode = s.chordMode; s.chordMode = 'fixed'; }
+      else s.chordMode = s.lastChordMode && s.lastChordMode !== 'fixed' ? s.lastChordMode : 'mutate';
+      buildKitPanel(); buildChordPanel(); regenerate({ audition: true });
+    }),
+    seg('Sound per pad', 'Sound per pad', [
+      ['variations', 'One character', 'Every pad is a variation of the chosen character'],
+      ['mixed', 'Different characters', 'Pad 1 keeps your character; each other pad uses a different one'],
+    ], s.soundMode === 'mixed' ? 'mixed' : 'variations', (v) => {
+      s.soundMode = v; buildKitPanel(); regenerate({ audition: true });
+    }),
+  ];
 }
 
 function loadPreset(id) {
@@ -383,7 +405,7 @@ function buildChordPanel() {
   );
   if (!useBuilder) builder.style.display = 'none';
 
-  const modeSel = field('Across the kit', selectInput(Object.keys(CHORD_MODES), s.chordMode, (v) => { s.chordMode = v; buildChordPanel(); regenerate(); }, Object.values(CHORD_MODES)), 'wide');
+  const modeSel = field('Across the kit', selectInput(Object.keys(CHORD_MODES), s.chordMode, (v) => { s.chordMode = v; buildChordPanel(); buildKitPanel(); regenerate(); }, Object.values(CHORD_MODES)), 'wide');
   const prog = field('Progression', selectInput(Object.keys(PROGRESSIONS), s.progression, (v) => { s.progression = v; regenerate(); }), 'wide');
   if (s.chordMode !== 'progression') prog.style.display = 'none';
 

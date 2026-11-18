@@ -143,6 +143,9 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .seg button { background: transparent; border: 0; padding: 5px 12px; cursor: pointer; font-size: 12px; color: var(--muted); }
 .seg button:hover { color: var(--text); }
 .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.seg.seg-fill { display: flex; width: 100%; }
+.seg.seg-fill button { flex: 1; padding: 7px 8px; }
+.ctl > .lbl { font-size: 12px; color: var(--label); }
 
 /* macros */
 .macros { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
