@@ -400,8 +400,8 @@ function buildChordPanel() {
     el('div', { class: 'ctl wide', style: 'margin-top:10px' }, el('span', { class: 'lbl' }, 'Notes — click keys to build any chord, however crazy'), keyboard(base.notes)),
     el('div', { class: 'grid2', style: 'margin-top:10px' },
       modeSel, prog,
-      field('Octave', selectInput([-2, -1, 0, 1, 2], s.octave ?? 0, (v) => { s.octave = Number(v); regenerate({ audition: true }); }, ['−2', '−1', '0', '+1', '+2'])),
-      field('Octave spread', selectInput([0, 1, 2], s.octaveRange ?? 0, (v) => { s.octaveRange = Number(v); regenerate(); }, ['Same octave', 'Up to ±1 octave', 'Up to ±2 octaves'])),
+      field('Octave', selectInput([-4, -3, -2, -1, 0, 1, 2, 3, 4], s.octave ?? 0, (v) => { s.octave = Number(v); regenerate({ audition: true }); }, ['−4', '−3', '−2', '−1', '0', '+1', '+2', '+3', '+4'])),
+      field('Octave spread', selectInput([0, 1, 2, 3, 4], s.octaveRange ?? 0, (v) => { s.octaveRange = Number(v); regenerate(); }, ['Same octave', 'Up to ±1 octave', 'Up to ±2 octaves', 'Up to ±3 octaves', 'Up to ±4 octaves'])),
       field('Key changes', selectInput(Object.keys(KEY_CHANGES), s.keyChange ?? 'off', (v) => { s.keyChange = v; buildChordPanel(); regenerate({ audition: true }); }, Object.values(KEY_CHANGES).map((k) => k.label)), 'wide'),
       (s.keyChange ?? 'off') !== 'off'
         ? field('Change key every', selectInput([1, 2, 4, 8], s.keyEvery ?? 4, (v) => { s.keyEvery = Number(v); regenerate(); }, ['pad', '2 pads', '4 pads', '8 pads']), 'wide')

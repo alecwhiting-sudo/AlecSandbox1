@@ -34,8 +34,8 @@ export function defaultKitSettings() {
     tailSpread: 0.6,
     delaySpread: 0.6,
     macroVariation: 0.3, // per-pad random nudge on every macro knob (0 = identical)
-    octave: 0,       // shift every pad by whole octaves (-2..+2)
-    octaveRange: 0,  // 0 = same octave, 1 or 2 = pads spread up/down by that many octaves
+    octave: 0,       // shift every pad by whole octaves (-4..+4)
+    octaveRange: 0,  // 0 = same octave, 1..4 = pads spread up/down by up to that many octaves
     keyChange: 'off', // a KEY_CHANGES id: modulate as the kit goes on
     keyEvery: 4,      // pads per key section
     macros: defaultMacros(),
@@ -367,14 +367,26 @@ function transposeChord(chord, semis) {
  * Move a chord by the kit's Octave setting plus a per-pad random shift within
  * Octave spread, kept inside a playable range (C1..C7).
  */
+// Playable range for placed chords: the piano's, A0 (27.5 Hz) to C8.
+export const NOTE_FLOOR = 21, NOTE_CEIL = 108;
+
+/**
+ * Shift a chord by the kit's Octave (-4..+4) plus a per-pad random shift
+ * within Octave spread (0..4). The whole shift is always applied; any note
+ * that would fall outside A0..C8 folds back by octaves into range, so even
+ * -4 or +4 on a mid-register chord still moves it as far as it can go.
+ */
 export function placeOctave(chord, settings, rng) {
-  const range = Math.max(0, Math.min(2, Math.round(settings.octaveRange ?? 0)));
-  let oct = Math.round(settings.octave ?? 0) + (range > 0 ? rng.int(-range, range) : 0);
-  const lo = Math.min(...chord.notes), hi = Math.max(...chord.notes);
-  while (hi + oct * 12 > 96 && oct > -4) oct--;
-  while (lo + oct * 12 < 24 && oct < 4) oct++;
+  const range = Math.max(0, Math.min(4, Math.round(settings.octaveRange ?? 0)));
+  const oct = Math.max(-4, Math.min(4, Math.round(settings.octave ?? 0))) + (range > 0 ? rng.int(-range, range) : 0);
   if (oct === 0) return { chord, octaveShift: 0 };
-  return { chord: { notes: chord.notes.map((n) => n + oct * 12), name: chord.name }, octaveShift: oct };
+  const notes = [...new Set(chord.notes.map((n) => {
+    let m = n + oct * 12;
+    while (m < NOTE_FLOOR) m += 12;
+    while (m > NOTE_CEIL) m -= 12;
+    return m;
+  }))].sort((a, b) => a - b);
+  return { chord: { notes, name: detectChord(notes) }, octaveShift: oct };
 }
 
 function delayLabel(p) {

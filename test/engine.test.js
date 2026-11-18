@@ -185,10 +185,17 @@ test('octave moves every pad; octave spread varies pads within the range', () =>
   assert.ok(shifts.size >= 2, `shifts ${[...shifts]}`);
   for (const k of spread) {
     assert.ok(Math.abs(k.info.octaveShift) <= 2);
-    assert.ok(k.chord.notes.every((n) => n >= 24 && n <= 96));
+    assert.ok(k.chord.notes.every((n) => n >= 21 && n <= 108));
   }
   // Extreme settings stay in range.
-  for (const k of generateKit({ ...s, octave: 2, octaveRange: 2 })) assert.ok(Math.max(...k.chord.notes) <= 96);
+  for (const k of generateKit({ ...s, octave: 4, octaveRange: 4 })) assert.ok(Math.max(...k.chord.notes) <= 108);
+  for (const k of generateKit({ ...s, octave: -4, octaveRange: 4 })) assert.ok(Math.min(...k.chord.notes) >= 21);
+  // Each step up the -4..+4 range raises the chord (never lowers it). A mid
+  // chord bottoms out on the lowest piano notes around -3, so only the very
+  // bottom steps may be equal.
+  const avg = (o) => { const n = generateKit({ ...s, size: 1, octave: o })[0].chord.notes; return n.reduce((a, b) => a + b, 0) / n.length; };
+  for (let o = -4; o < 4; o++) assert.ok(avg(o + 1) >= avg(o), `octave ${o} -> ${o + 1}`);
+  for (let o = -3; o < 4; o++) assert.ok(avg(o + 1) > avg(o), `octave ${o} -> ${o + 1} should move`);
 });
 
 test('key changes move pad sections into new keys', async () => {
