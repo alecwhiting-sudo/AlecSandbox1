@@ -125,7 +125,9 @@ export function varyPatch(patch, rng, amount, locks = {}) {
     p.gate = clamp(p.gate * vmul(rng, v, 0.6), 0.05, 8);
     p.velocity = clamp(p.velocity + rng.bipolar() * v * 0.2, 0.2, 1);
     p.pitchEnv.amount = clamp(p.pitchEnv.amount + rng.bipolar() * v * 0.3, -24, 24);
-    if (rng.chance(v * 0.3)) p.strum = clamp(rng.range(0.004, 0.03) * v, 0, 0.12);
+    // Only vary a strum you've set; at zero it stays zero. (Same random draws as
+    // before, so kits made from a seed keep their other values.)
+    if (rng.chance(v * 0.3)) { const k = rng.range(0.6, 1.4); if (p.strum > 0) p.strum = clamp(p.strum * k, 0, 0.12); }
   }
   if (!locks.colour) {
     p.colour.drive = clamp(p.colour.drive + rng.bipolar() * v * 0.2, 0, 1);

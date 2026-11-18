@@ -219,3 +219,10 @@ test('knob variation nudges each pad; 0 keeps them identical; locks win', () => 
   const locked = generateKit({ ...s, macroVariation: 0.5, locks: { ...s.locks, filter: true } });
   assert.equal(new Set(cut(locked)).size, 1);
 });
+
+test('strum set to zero stays zero on every pad, even with high variation', () => {
+  const s = { ...defaultKitSettings(), size: 16, variation: 1 };
+  for (const st of generateKit(s)) assert.equal(st.patch.strum, 0, `pad ${st.index + 1}`);
+  const strummed = { ...s, basePatch: { ...presetPatch('dub-chord'), strum: 0.02 } };
+  assert.ok(generateKit(strummed).some((st) => st.patch.strum > 0));
+});
