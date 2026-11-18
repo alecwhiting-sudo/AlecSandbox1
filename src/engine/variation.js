@@ -4,7 +4,7 @@
 import { Rng } from '../dsp/rng.js';
 import { clamp, DIVISIONS } from '../dsp/util.js';
 import { clone, applyMacros, applyLocks, LOCK_GROUPS, defaultMacros, MACROS } from './patch.js';
-import { PRESET_BY_ID, presetPatch, presetsNear } from './presets.js';
+import { PRESETS, PRESET_BY_ID, presetPatch, presetsNear } from './presets.js';
 import { buildChord, diatonicChord, randomChord, mutateChord, PROGRESSIONS } from '../music/chords.js';
 import { detectChord, NOTE_NAMES } from '../music/theory.js';
 
@@ -34,6 +34,7 @@ export function defaultKitSettings() {
     tailSpread: 0.6,
     delaySpread: 0.6,
     macroVariation: 0.3, // per-pad random nudge on every macro knob (0 = identical)
+    soundMode: 'variations', // 'variations' of one character, or 'mixed': a different character per pad
     octave: 0,       // shift every pad by whole octaves (-4..+4)
     octaveRange: 0,  // 0 = same octave, 1..4 = pads spread up/down by up to that many octaves
     keyChange: 'off', // a KEY_CHANGES id: modulate as the kit goes on
@@ -250,6 +251,9 @@ export function generateKit(settings, previous = null) {
   const tails = tailPlan(settings);
   const delays = delayPlan(settings, base.delay.division);
   const keyOffsets = keyPlan(settings);
+  const soundPlan = settings.soundMode === 'mixed'
+    ? new Rng(`${settings.seed}|sounds`).shuffle(PRESETS.filter((p) => p.id !== settings.presetId))
+    : null;
   const stabs = [];
   let prevChord = null;
   for (let i = 0; i < settings.size; i++) {
@@ -262,11 +266,15 @@ export function generateKit(settings, previous = null) {
     prevChord = baseChord; // mutate chains continue from the unshifted chord
     const keyed = transposeChord(baseChord, keyOffsets[i]);
     const { chord, octaveShift } = placeOctave(keyed, settings, rng.fork('octave'));
+    // Mixed sounds: pad 1 keeps your character, the others each get a
+    // different one from the presets (same chord, different sound).
+    const character = soundFor(settings, i, soundPlan, rng.fork('sound'));
     // Each pad's own take on the macro knobs; locked groups keep the kit's values.
     let padBase = base, macros = settings.macros ?? defaultMacros();
-    if ((settings.macroVariation ?? 0) > 0) {
-      macros = padMacros(settings, rng.fork('macros'));
-      padBase = applyLocks(applyMacros(rawPatchFor(settings), macros), base, settings.locks);
+    if ((settings.macroVariation ?? 0) > 0 || character) {
+      if ((settings.macroVariation ?? 0) > 0) macros = padMacros(settings, rng.fork('macros'));
+      const raw = character ? presetPatch(character.id) : rawPatchFor(settings);
+      padBase = applyLocks(applyMacros(raw, macros), base, settings.locks);
     }
     const { patch: fam, borrowed } = borrowFamily(padBase, rng.fork('family'), settings, settings.familySpread ?? 0);
     let patch = varyPatch(fam, rng.fork('vary'), settings.variation ?? 0, settings.locks);
@@ -291,7 +299,7 @@ export function generateKit(settings, previous = null) {
     stabs.push({
       index: i, seed, chord, patch, tail: tails[i],
       renderSeed: rng.int(1, 2 ** 31 - 1),
-      info: { borrowed, macros, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch), octaveShift, key: keyOffsets[i] !== 0 || settings.keyChange !== 'off' ? keyName(settings, keyOffsets[i]) : '' },
+      info: { borrowed, macros, character: character?.name ?? null, tailLabel: tailLabel(tails[i]), delay: delayLabel(patch), octaveShift, key: keyOffsets[i] !== 0 || settings.keyChange !== 'off' ? keyName(settings, keyOffsets[i]) : '' },
       settingsKey: settingsKey(settings),
     });
   }
@@ -387,6 +395,14 @@ export function placeOctave(chord, settings, rng) {
     return m;
   }))].sort((a, b) => a - b);
   return { chord: { notes, name: detectChord(notes) }, octaveShift: oct };
+}
+
+/** Which preset a pad uses in mixed mode (null = the kit's own character). */
+function soundFor(settings, i, plan, rng) {
+  if (!plan || !plan.length || i === 0) return null;
+  // A re-rolled pad draws a fresh character instead of its slot.
+  if ((settings.stabSeeds?.[i] ?? 0) > 0) return rng.pick(plan);
+  return plan[(i - 1) % plan.length];
 }
 
 function delayLabel(p) {

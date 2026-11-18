@@ -233,3 +233,17 @@ test('strum set to zero stays zero on every pad, even with high variation', () =
   const strummed = { ...s, basePatch: { ...presetPatch('dub-chord'), strum: 0.02 } };
   assert.ok(generateKit(strummed).some((st) => st.patch.strum > 0));
 });
+
+test('same chord, different sounds: fixed chord with a different character per pad', () => {
+  const s = { ...defaultKitSettings(), size: 8, chordMode: 'fixed', soundMode: 'mixed' };
+  const kit = generateKit(s);
+  const chords = new Set(kit.map((k) => k.chord.notes.join()));
+  assert.equal(chords.size, 1, 'one chord');
+  assert.equal(kit[0].info.character, null, 'pad 1 keeps your character');
+  const chars = new Set(kit.slice(1).map((k) => k.info.character));
+  assert.equal(chars.size, 7, `different characters: ${[...chars]}`);
+  // Different characters really sound different: oscillator setups differ.
+  assert.ok(new Set(kit.map((k) => JSON.stringify(k.patch.osc.map((o) => o.on && o.type)))).size >= 4);
+  // Variations mode keeps one character.
+  assert.ok(generateKit({ ...s, soundMode: 'variations' }).every((k) => !k.info.character));
+});

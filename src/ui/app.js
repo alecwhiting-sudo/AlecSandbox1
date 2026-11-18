@@ -323,6 +323,15 @@ function buildKitPanel() {
     rangeInput({ label: 'Family spread', min: 0, max: 1, step: 0.01 }, s.familySpread, (v) => { s.familySpread = v; regenerate(); }),
     rangeInput({ label: 'Tail spread', min: 0, max: 1, step: 0.01 }, s.tailSpread, (v) => { s.tailSpread = v; regenerate(); }),
     rangeInput({ label: 'Delay time spread', min: 0, max: 1, step: 0.01 }, s.delaySpread ?? 0, (v) => { s.delaySpread = v; regenerate(); }, 'wide'),
+    field('Sounds across the kit', selectInput(['variations', 'mixed'], s.soundMode ?? 'variations', (v) => { s.soundMode = v; regenerate({ audition: true }); },
+      ['Variations of this character', 'A different character per pad']), 'wide'),
+    el('div', { class: 'ctl wide' }, el('button', {
+      class: 'btn small', title: 'Every pad plays the same chord, each with a different sound',
+      onclick: () => {
+        s.chordMode = 'fixed'; s.soundMode = 'mixed';
+        buildKitPanel(); buildChordPanel(); regenerate({ immediate: true, audition: true });
+      },
+    }, 'Same chord, different sounds')),
   );
 }
 
@@ -860,6 +869,7 @@ function buildPads() {
     canvas,
     el('div', { class: 'p-top' }, el('span', { class: 'p-tail' }, `${st.info?.tailLabel ?? ''} tail${st.info?.delay ? ` · ${st.info.delay}` : ''}`), el('span', { class: 'p-num', 'data-len': '' }, '')),
     el('div', { class: 'p-meta' }, [
+      st.info?.character ? st.info.character : '',
       st.info?.key ? `key ${st.info.key}` : '',
       st.info?.octaveShift ? `${st.info.octaveShift > 0 ? '+' : '−'}${Math.abs(st.info.octaveShift)} oct` : '',
       st.info?.borrowed ? `+ ${st.info.borrowed.groups.join(', ')} from ${st.info.borrowed.from}` : st.info?.mutated ? `mutated ×${st.info.mutated}` : '',
