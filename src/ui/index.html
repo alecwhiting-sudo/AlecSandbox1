@@ -75,11 +75,12 @@
           <h2 id="wave-title">—</h2>
           <div class="row gap">
             <span id="wave-info" class="sub"></span>
+            <button id="btn-reverse" class="btn small" aria-pressed="false" title="Play this pad backwards (also in exports)">⇆ Reverse</button>
             <button id="btn-unchop" class="btn small" hidden>Reset chop</button>
           </div>
         </div>
         <canvas id="wave" class="wave" height="140" aria-label="Waveform of the selected stab. Click to chop the tail at that point."></canvas>
-        <p class="hint">Bright = dry stab, soft = reverb/delay tail. Click the waveform to chop the tail there.</p>
+        <p class="hint">Bright = dry stab, soft = reverb/delay tail. Click the waveform to chop the tail there. Reverse plays the pad backwards, so the tail swells into the hit.</p>
       </section>
 
       <section class="panel" id="panel-sound">

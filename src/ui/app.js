@@ -36,6 +36,7 @@ const state = {
   overrides: {},    // index -> { baseSeed, key, stab } (mutated pads)
   held: {},         // index -> stab (pads kept when generating a new kit)
   chops: {},        // uid -> sample position
+  reversed: {},     // uid -> true when the pad plays backwards
   selected: 0,
   audition: 'mix',
   sidechain: null,  // Float32Array at export sample rate
@@ -149,7 +150,7 @@ function regenerate({ immediate = false, audition = false } = {}) {
     for (const st of stabs) if (!st.uid) st.uid = ++state.uid;
     // Forget renders that are no longer used.
     const live = new Set(stabs.map((x) => x.uid));
-    for (const uid of Object.keys(state.renders)) if (!live.has(Number(uid))) { delete state.renders[uid]; delete state.chops[uid]; }
+    for (const uid of Object.keys(state.renders)) if (!live.has(Number(uid))) { delete state.renders[uid]; delete state.chops[uid]; delete state.reversed[uid]; }
     state.stabs = stabs;
     if (state.selected >= stabs.length) state.selected = 0;
     if (audition && autoAudition) autoPlayUid = stabs[state.selected]?.uid ?? null;
@@ -695,7 +696,8 @@ function buildPads() {
       role: 'button', 'aria-label': `Stab ${i + 1}: ${st.chord.name}`,
     },
     el('div', { class: 'p-top' }, el('span', { class: 'p-chord', title: st.chord.notes.map(noteName).join(' ') }, st.chord.name),
-      el('span', { class: 'p-badges' }, held ? el('span', { class: 'p-held', title: 'New kit keeps this pad' }, 'Held') : null, el('span', { class: 'p-num' }, PAD_KEYS[i]?.toUpperCase() ?? ''))),
+      el('span', { class: 'p-badges' }, state.reversed[st.uid] ? el('span', { class: 'p-held', title: 'This pad plays backwards' }, 'Rev') : null,
+        held ? el('span', { class: 'p-held', title: 'New kit keeps this pad' }, 'Held') : null, el('span', { class: 'p-num' }, PAD_KEYS[i]?.toUpperCase() ?? ''))),
     canvas,
     el('div', { class: 'p-top' }, el('span', { class: 'p-tail' }, `${st.info?.tailLabel ?? ''} tail${st.info?.delay ? ` · ${st.info.delay}` : ''}`), el('span', { class: 'p-num', 'data-len': '' }, '')),
     el('div', { class: 'p-meta' }, [
@@ -739,7 +741,22 @@ function prepared(i) {
   const st = state.stabs[i];
   const r = st && state.renders[st.uid];
   if (!r) return null;
-  return prepareStab(r, state.ex, state.settings.bpm, padGain(i), state.chops[st.uid] ?? null);
+  const p = prepareStab(r, state.ex, state.settings.bpm, padGain(i), state.chops[st.uid] ?? null);
+  if (state.reversed[st.uid]) for (const chs of [p.dry, p.wet, p.mix]) for (const ch of chs) ch.reverse();
+  return p;
+}
+
+// File name for a pad: reversed pads get a _rev suffix.
+function padFileBase(i, kit = kitMeta()) {
+  const st = state.stabs[i];
+  return `${stabFileBase(st, kit)}${state.reversed[st.uid] ? '_rev' : ''}`;
+}
+
+function toggleReverse(i = state.selected) {
+  const st = state.stabs[i];
+  if (!st) return;
+  if (state.reversed[st.uid]) delete state.reversed[st.uid]; else state.reversed[st.uid] = true;
+  buildPads(); drawWave(); play(i); syncFolder();
 }
 
 function drawPad(i) {
@@ -834,10 +851,19 @@ function drawWave() {
   ctx.clearRect(0, 0, w, h);
   $('#wave-title').textContent = st ? `Pad ${state.selected + 1} · ${st.chord.name}` : '—';
   $('#btn-unchop').hidden = !(st && state.chops[st.uid] != null);
+  const rev = !!(st && state.reversed[st.uid]);
+  const rb = $('#btn-reverse');
+  rb.disabled = !st;
+  rb.classList.toggle('on', rev);
+  rb.setAttribute('aria-pressed', String(rev));
+  rb.textContent = rev ? '⇆ Reversed' : '⇆ Reverse';
   if (!r) { $('#wave-info').textContent = st ? 'rendering…' : ''; return; }
   const full = prepareStab(r, state.ex, state.settings.bpm, padGain(state.selected), null);
   const chop = state.chops[st.uid];
   const span = full.length;
+  // A reversed pad is drawn mirrored, so what you see is what plays.
+  ctx.save();
+  if (rev) { ctx.translate(w, 0); ctx.scale(-1, 1); }
   drawPeaks(ctx, full, w, h, span);
   // dry-end marker
   ctx.fillStyle = cssVar('--muted');
@@ -854,9 +880,10 @@ function drawWave() {
   const beat = (60 / state.settings.bpm) * r.sr;
   ctx.fillStyle = cssVar('--line');
   for (let b = beat; b < span; b += beat) ctx.fillRect((b / span) * w, h - 6, 1, 6);
+  ctx.restore();
   const len = chop ?? full.length;
   const chs = st.chord.notes.map(noteName).join(' ');
-  $('#wave-info').textContent = `${chs} · ${(len / r.sr).toFixed(2)} s${chop != null ? ' (chopped)' : ''} · ${(len / beat).toFixed(1)} beats`;
+  $('#wave-info').textContent = `${chs} · ${(len / r.sr).toFixed(2)} s${chop != null ? ' (chopped)' : ''}${rev ? ' · reversed' : ''} · ${(len / beat).toFixed(1)} beats`;
 }
 
 $('#wave').addEventListener('click', (e) => {
@@ -865,7 +892,9 @@ $('#wave').addEventListener('click', (e) => {
   if (!r) return;
   const rect = e.currentTarget.getBoundingClientRect();
   const full = finalLength(r, state.ex, state.settings.bpm);
-  let pos = Math.round(((e.clientX - rect.left) / rect.width) * full);
+  let x = (e.clientX - rect.left) / rect.width;
+  if (state.reversed[st.uid]) x = 1 - x; // the view is mirrored
+  let pos = Math.round(x * full);
   // Snap to the beat grid when close.
   const beat = (60 / state.settings.bpm) * r.sr;
   const nearest = Math.round(pos / beat) * beat;
@@ -873,6 +902,7 @@ $('#wave').addEventListener('click', (e) => {
   state.chops[st.uid] = Math.max(Math.round(r.sr * 0.02), pos);
   drawWave(); drawPad(state.selected); play(state.selected); syncFolder();
 });
+$('#btn-reverse').addEventListener('click', () => toggleReverse());
 $('#btn-unchop').addEventListener('click', () => {
   const st = state.stabs[state.selected];
   if (st) delete state.chops[st.uid];
@@ -1050,7 +1080,7 @@ function padWav(i) {
   if (!p) return null;
   const chs = state.audition === 'dry' ? p.dry : state.audition === 'wet' ? p.wet : p.mix;
   const suffix = state.audition === 'dry' ? '_dry' : state.audition === 'wet' ? '_tail' : '';
-  return { data: encodeWav(chs, p.sr, state.ex.bitDepth), name: `${stabFileBase(state.stabs[i], kitMeta())}${suffix}.wav` };
+  return { data: encodeWav(chs, p.sr, state.ex.bitDepth), name: `${padFileBase(i)}${suffix}.wav` };
 }
 
 async function downloadPad(i) {
@@ -1073,12 +1103,12 @@ function folderGroups() {
   const groups = [];
   state.stabs.forEach((st, i) => {
     if (!state.renders[st.uid]) return;
-    const base = stabFileBase(st, kit);
+    const base = padFileBase(i, kit);
     const names = [];
     if (state.ex.stems !== 'stems') names.push(`${base}.wav`);
     if (state.ex.stems !== 'mix') names.push(`stems/${base}_dry.wav`, `stems/${base}_tail.wav`);
     groups.push({
-      key: `${st.uid}|${state.chops[st.uid] ?? ''}|${padGain(i).toFixed(6)}|${exKey}`,
+      key: `${st.uid}|${state.chops[st.uid] ?? ''}|${state.reversed[st.uid] ? 'r' : ''}|${padGain(i).toFixed(6)}|${exKey}`,
       names,
       build: () => stabFiles(prepared(i), base, state.ex),
     });
@@ -1146,7 +1176,7 @@ const dragCache = new Map();
 function prepareDrag(i) {
   const st = state.stabs[i];
   if (!st || !state.renders[st.uid]) return;
-  const key = `${st.uid}|${state.audition}|${JSON.stringify(state.ex)}|${state.chops[st.uid] ?? ''}`;
+  const key = `${st.uid}|${state.audition}|${JSON.stringify(state.ex)}|${state.chops[st.uid] ?? ''}|${state.reversed[st.uid] ? 'r' : ''}`;
   if (dragCache.get(i)?.key === key) return;
   const w = padWav(i);
   if (!w) return;
@@ -1186,7 +1216,7 @@ $('#btn-export').addEventListener('click', async () => {
   const files = [];
   state.stabs.forEach((st, i) => {
     const p = prepared(i);
-    if (p) files.push(...stabFiles(p, stabFileBase(st, kit), state.ex));
+    if (p) files.push(...stabFiles(p, padFileBase(i, kit), state.ex));
   });
   try {
     if (dir) {
@@ -1228,6 +1258,7 @@ $('#btn-save').addEventListener('click', () => {
     overrides: Object.fromEntries(Object.entries(state.overrides).map(([i, o]) => [i, { ...o, stab: strip(o.stab) }])),
     held: Object.fromEntries(Object.entries(state.held).map(([i, st]) => [i, strip(st)])),
     chops: Object.fromEntries(state.stabs.map((st, i) => [i, state.chops[st.uid]]).filter(([, v]) => v != null)),
+    reversed: state.stabs.map((st, i) => (state.reversed[st.uid] ? i : -1)).filter((i) => i >= 0),
   };
   downloadBlob(JSON.stringify(data, null, 2), `${kitFolderName(kitMeta())}.json`, 'application/json');
 });
@@ -1240,10 +1271,12 @@ $('#file-load').addEventListener('change', async (e) => {
     state.ex = { ...defaultExportSettings(), ...data.ex };
     state.overrides = data.overrides ?? {};
     state.held = data.held ?? {};
-    state.stabs = []; state.renders = {}; state.chops = {};
+    state.stabs = []; state.renders = {}; state.chops = {}; state.reversed = {};
     buildAll();
     regenerate({ immediate: true });
     for (const [i, v] of Object.entries(data.chops ?? {})) { const st = state.stabs[i]; if (st) state.chops[st.uid] = v; }
+    for (const i of data.reversed ?? []) { const st = state.stabs[i]; if (st) state.reversed[st.uid] = true; }
+    buildPads(); drawWave();
   } catch (err) {
     $('#status').textContent = `Could not load kit file (${err.message})`;
   }
