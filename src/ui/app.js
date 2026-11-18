@@ -333,7 +333,7 @@ function loadPreset(id) {
   const pr = PRESET_BY_ID[id];
   if (pr?.chord && !s.customNotes) Object.assign(s.chord, pr.chord);
   $('#preset-title').textContent = pr?.name ?? 'Character';
-  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip(); buildCompStrip(); buildLimitStrip(); buildWaveStrip();
+  buildKitPanel(); buildChordPanel(); buildSoundPanel(); buildDelayStrip(); buildTextureStrip(); buildDynamicsStrip(); buildWaveStrip();
   regenerate({ audition: true });
 }
 
@@ -563,8 +563,7 @@ function buildMacros() {
   })));
   buildDelayStrip();
   buildTextureStrip();
-  buildCompStrip();
-  buildLimitStrip();
+  buildDynamicsStrip();
   buildWaveStrip();
 }
 
@@ -597,31 +596,50 @@ function buildDelayStrip() {
   );
 }
 
-// Compressor quick controls, next to the macros.
-function buildCompStrip() {
-  const root = $('#comp-strip');
+// Dynamics: compressor and limiter quick controls on one row. Comp mix and
+// limiter release live in Sound design > Compressor.
+const COMP_DEFAULT = { amount: 0.3, mode: 'stab', ratio: 4, attack: 0.012, release: 0.15, mix: 1 };
+const LIMIT_DEFAULT = { on: true, drive: 3, release: 0.08 };
+function buildDynamicsStrip() {
+  const root = $('#dynamics-strip');
   if (!root) return;
-  const c = currentBase().comp ?? { amount: 0, mode: 'stab', attack: 0.012, release: 0.15, mix: 1 };
+  const base = currentBase();
+  const c = base.comp ?? { ...COMP_DEFAULT, amount: 0 };
+  const lim = base.limiter ?? { ...LIMIT_DEFAULT, on: false };
   const mode = c.amount <= 0 ? 'off' : c.mode;
-  const set = (fn) => { const p = editablePatch(); p.comp = p.comp ?? { amount: 0.3, mode: 'stab', ratio: 4, attack: 0.012, release: 0.15, mix: 1 }; fn(p.comp); markEdited(); buildSoundPanel(); buildCompStrip(); regenerate({ audition: true }); };
-  const slider = (label, key, prm, hint) => el('div', { class: 'strip-ctl wide', title: hint },
-    rangeInput({ label, ...prm }, c[key], (v) => { const p = editablePatch(); p.comp[key] = v; markEdited(); regenerate({ audition: true }); }));
+  const edit = (fn, rebuild = true) => {
+    const p = editablePatch();
+    p.comp = p.comp ?? { ...COMP_DEFAULT };
+    p.limiter = p.limiter ?? { ...LIMIT_DEFAULT };
+    fn(p);
+    markEdited();
+    if (rebuild) { buildSoundPanel(); buildDynamicsStrip(); }
+    regenerate({ audition: true });
+  };
+  const slider = (label, value, prm, hint, apply) => el('div', { class: 'strip-ctl wide', title: hint },
+    rangeInput({ label, ...prm }, value, (v) => edit((p) => apply(p, v), false)));
   root.replaceChildren(
-    el('span', { class: 'lbl' }, 'Comp'),
-    el('div', { class: 'seg', role: 'group', 'aria-label': 'Compressor mode' },
-      ...[['stab', 'Stab'], ['glue', 'Glue'], ['off', 'Off']].map(([v, label]) =>
-        el('button', {
-          class: mode === v ? 'on' : '',
-          title: v === 'stab' ? 'Compress the hit before it feeds the delay and reverb' : v === 'glue' ? 'Compress the stab and its tails together, so the tails pump around the hit' : 'No compression',
-          onclick: () => set((x) => {
-            if (v === 'off') { if (x.amount > 0) x.lastAmount = x.amount; x.amount = 0; }
-            else { x.mode = v; if (x.amount <= 0) x.amount = x.lastAmount || 0.3; }
-          }),
-        }, label))),
-    slider('Amount', 'amount', { min: 0, max: 1, step: 0.01 }, 'How hard it squeezes'),
-    slider('Attack', 'attack', { min: 0.0002, max: 0.3, step: 0.0001, scale: 'log', unit: 's' }, 'Slower attack lets the transient punch through'),
-    slider('Release', 'release', { min: 0.01, max: 2, step: 0.01, scale: 'log', unit: 's' }, 'How fast it lets go; longer pumps less'),
-    slider('Mix', 'mix', { min: 0, max: 1, step: 0.01 }, 'Parallel blend of compressed and uncompressed'),
+    el('span', { class: 'lbl' }, 'Dynamics'),
+    el('div', { class: 'seg', role: 'group', 'aria-label': 'Compressor' },
+      ...[['stab', 'Stab'], ['glue', 'Glue'], ['off', 'Off']].map(([v, label]) => el('button', {
+        class: mode === v ? 'on' : '',
+        title: v === 'stab' ? 'Compress the hit before it feeds the delay and reverb'
+          : v === 'glue' ? 'Compress the stab and its tails together, so the tails pump around the hit' : 'No compression',
+        onclick: () => edit((p) => {
+          const x = p.comp;
+          if (v === 'off') { if (x.amount > 0) x.lastAmount = x.amount; x.amount = 0; }
+          else { x.mode = v; if (x.amount <= 0) x.amount = x.lastAmount || 0.3; }
+        }),
+      }, label))),
+    slider('Comp', c.amount, { min: 0, max: 1, step: 0.01 }, 'How hard the compressor squeezes', (p, v) => { p.comp.amount = v; }),
+    slider('Attack', c.attack, { min: 0.0002, max: 0.3, step: 0.0001, scale: 'log', unit: 's' }, 'Slower attack lets the transient punch through', (p, v) => { p.comp.attack = v; }),
+    slider('Release', c.release, { min: 0.01, max: 2, step: 0.01, scale: 'log', unit: 's' }, 'How fast the compressor lets go', (p, v) => { p.comp.release = v; }),
+    el('button', {
+      class: `chip${lim.on ? ' on' : ''}`, 'aria-pressed': lim.on ? 'true' : 'false',
+      title: 'Limiter: catch the peaks of the stab and its tails',
+      onclick: () => edit((p) => { p.limiter.on = !p.limiter.on; }),
+    }, lim.on ? 'Limit on' : 'Limit off'),
+    slider('Drive', lim.drive, { min: 0, max: 18, step: 0.5, unit: 'dB' }, 'Push into the limiter: louder and denser, same peak', (p, v) => { p.limiter.drive = v; if (!p.limiter.on) { p.limiter.on = true; } }),
   );
 }
 
@@ -652,24 +670,6 @@ function buildWaveStrip() {
         regenerate({ audition: true });
       })),
     ...(known ? [] : [el('span', { class: 'sub' }, `Osc 1: ${o.on ? o.type : 'off'}`)]),
-  );
-}
-
-// Limiter quick controls.
-function buildLimitStrip() {
-  const root = $('#limit-strip');
-  if (!root) return;
-  const lim = currentBase().limiter ?? { on: false, drive: 3, release: 0.08 };
-  const set = (fn) => { const p = editablePatch(); p.limiter = p.limiter ?? { on: true, drive: 3, release: 0.08 }; fn(p.limiter); markEdited(); buildSoundPanel(); buildLimitStrip(); regenerate({ audition: true }); };
-  const slider = (label, key, prm, hint) => el('div', { class: 'strip-ctl wide', title: hint },
-    rangeInput({ label, ...prm }, lim[key], (v) => { const p = editablePatch(); p.limiter = p.limiter ?? { on: true, drive: 3, release: 0.08 }; p.limiter[key] = v; markEdited(); regenerate({ audition: true }); }));
-  root.replaceChildren(
-    el('span', { class: 'lbl' }, 'Limit'),
-    el('div', { class: 'seg', role: 'group', 'aria-label': 'Limiter' },
-      el('button', { class: lim.on ? 'on' : '', title: 'Catch the peaks of the stab and its tails', onclick: () => set((x) => { x.on = true; }) }, 'On'),
-      el('button', { class: lim.on ? '' : 'on', title: 'No limiting', onclick: () => set((x) => { x.on = false; }) }, 'Off')),
-    slider('Drive', 'drive', { min: 0, max: 18, step: 0.5, unit: 'dB' }, 'How hard to push into the limiter: louder and denser, same peak'),
-    slider('Release', 'release', { min: 0.005, max: 1, step: 0.005, scale: 'log', unit: 's' }, 'How fast the limiter lets go'),
   );
 }
 
@@ -722,8 +722,7 @@ function buildSoundPanel() {
         if (prm.path.endsWith('.type') && sec.id.startsWith('osc')) buildSoundPanel();
         if (prm.path.startsWith('delay.')) buildDelayStrip();
         if (prm.path.startsWith('texture.') || prm.path === 'noise.air') buildTextureStrip();
-        if (prm.path.startsWith('comp.')) buildCompStrip();
-        if (prm.path.startsWith('limiter.')) buildLimitStrip();
+        if (prm.path.startsWith('comp.') || prm.path.startsWith('limiter.')) buildDynamicsStrip();
         if (prm.path.startsWith('osc.0.')) buildWaveStrip();
         regenerate({ audition: true });
       };
