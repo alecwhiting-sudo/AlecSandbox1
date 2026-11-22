@@ -406,7 +406,7 @@ function soundFor(settings, i, plan, rng) {
 }
 
 function delayLabel(p) {
-  if (!(p.delay?.send > 0)) return '';
+  if (!(p.delay?.send > 0) || p.delay.on === false) return '';
   return p.delay.divisionR ? `${p.delay.division}+${p.delay.divisionR}` : p.delay.division;
 }
 

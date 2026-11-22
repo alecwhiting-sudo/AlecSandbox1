@@ -56,7 +56,7 @@ export function getPath(obj, path) {
 export function setPath(obj, path, value) {
   const keys = path.split('.');
   let o = obj;
-  for (let i = 0; i < keys.length - 1; i++) o = o[keys[i]];
+  for (let i = 0; i < keys.length - 1; i++) o = o[keys[i]] ??= {};
   o[keys[keys.length - 1]] = value;
 }
 export const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -255,7 +255,7 @@ export const SCHEMA = [
     ],
   },
   {
-    id: 'colour', label: 'Colour', lock: 'colour', params: [
+    id: 'colour', label: 'Colour', lock: 'colour', switches: [['colour.on', 'Saturation'], ['transient.on', 'Transient'], ['chorus.on', 'Chorus']], params: [
       sel('colour.mode', 'Saturation', SAT_MODES),
       r('colour.drive', 'Drive', 0, 1, 0.01),
       r('colour.mix', 'Mix', 0, 1, 0.01),
@@ -270,20 +270,19 @@ export const SCHEMA = [
     ],
   },
   {
-    id: 'comp', label: 'Compressor', lock: 'colour', params: [
+    id: 'comp', label: 'Compressor', lock: 'colour', switches: [['comp.on', 'Compressor'], ['limiter.on', 'Limiter']], params: [
       r('comp.amount', 'Amount', 0, 1, 0.01),
       sel('comp.mode', 'Mode', ['stab', 'glue'], ['Stab (before delay/reverb)', 'Glue (stab + tails)']),
       r('comp.ratio', 'Ratio', 1, 20, 0.5, { unit: ':1', scale: 'log' }),
       r('comp.attack', 'Attack', 0.0002, 0.3, 0.0001, { unit: 's', scale: 'log' }),
       r('comp.release', 'Release', 0.01, 2, 0.01, { unit: 's', scale: 'log' }),
       r('comp.mix', 'Mix (parallel)', 0, 1, 0.01),
-      tog('limiter.on', 'Limiter'),
       r('limiter.drive', 'Limiter drive', 0, 18, 0.5, { unit: 'dB' }),
       r('limiter.release', 'Limiter release', 0.005, 1, 0.005, { unit: 's', scale: 'log' }),
     ],
   },
   {
-    id: 'texture', label: 'Crackle & hiss', lock: 'colour', params: [
+    id: 'texture', label: 'Crackle & hiss', lock: 'colour', switches: [['texture.on', 'On']], params: [
       r('texture.crackle', 'Crackle', 0, 1, 0.01),
       r('texture.density', 'Crackle density', 0, 1, 0.01),
       r('texture.tone', 'Crackle tone', 0, 1, 0.01),
@@ -292,7 +291,7 @@ export const SCHEMA = [
     ],
   },
   {
-    id: 'output', label: 'Output', lock: 'colour', params: [
+    id: 'output', label: 'Output', lock: 'colour', switches: [['eq.on', 'EQ']], params: [
       r('eq.lowCut', 'Low cut', 15, 1500, 1, { unit: 'Hz', scale: 'log' }),
       r('eq.highCut', 'High cut', 1000, 20000, 1, { unit: 'Hz', scale: 'log' }),
       r('eq.tilt', 'Tilt', -1, 1, 0.01),
@@ -302,7 +301,7 @@ export const SCHEMA = [
     ],
   },
   {
-    id: 'delay', label: 'Delay', lock: 'space', params: [
+    id: 'delay', label: 'Delay', lock: 'space', switches: [['delay.on', 'On']], params: [
       r('delay.send', 'Send', 0, 1, 0.01),
       sel('delay.mode', 'Mode', DELAY_MODES),
       sel('delay.division', 'Time', Object.keys(DIVISIONS)),
@@ -317,7 +316,7 @@ export const SCHEMA = [
     ],
   },
   {
-    id: 'reverb', label: 'Reverb', lock: 'space', params: [
+    id: 'reverb', label: 'Reverb', lock: 'space', switches: [['reverb.on', 'On']], params: [
       r('reverb.send', 'Send', 0, 1, 0.01),
       sel('reverb.type', 'Type', REVERB_TYPES),
       r('reverb.size', 'Size', 0, 1, 0.01),

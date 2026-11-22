@@ -604,13 +604,13 @@ function buildDelayStrip() {
   const root = $('#delay-strip');
   if (!root) return;
   const d = currentBase().delay;
-  const mode = d.send <= 0 ? 'off' : d.mode;
+  const mode = d.send <= 0 || d.on === false ? 'off' : d.mode;
   const set = (fn) => { const p = editablePatch(); fn(p.delay); markEdited(); buildSoundPanel(); buildDelayStrip(); regenerate({ audition: true }); };
   const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Delay style' },
     ...[['pingpong', 'Ping-pong'], ['stereo', 'Stereo'], ['tape', 'Tape'], ['off', 'Off']].map(([v, label]) =>
       el('button', { class: mode === v ? 'on' : '', onclick: () => set((x) => {
         if (v === 'off') { if (x.send > 0) x.lastSend = x.send; x.send = 0; }
-        else { x.mode = v; if (x.send <= 0) x.send = x.lastSend || 0.25; }
+        else { x.mode = v; x.on = true; if (x.send <= 0) x.send = x.lastSend || 0.25; }
       }) }, label)));
   root.replaceChildren(
     el('span', { class: 'lbl' }, 'Delay'), seg,
@@ -626,7 +626,7 @@ function buildDelayStrip() {
         const p = editablePatch(); p.delay.grit = v; markEdited(); regenerate({ audition: true });
       })),
   );
-  foldable(root, 'delay', d.send <= 0 ? 'Off' : `${{ pingpong: 'Ping-pong', stereo: 'Stereo', tape: 'Tape' }[d.mode] ?? d.mode} · ${d.division} · ${Math.round(d.send * 100)}%`);
+  foldable(root, 'delay', mode === 'off' ? 'Off' : `${{ pingpong: 'Ping-pong', stereo: 'Stereo', tape: 'Tape' }[d.mode] ?? d.mode} · ${d.division} · ${Math.round(d.send * 100)}%`);
 }
 
 // ---------------------------------------------------------------- foldable control rows
@@ -708,7 +708,7 @@ function buildDynamicsStrip() {
   const base = currentBase();
   const c = base.comp ?? { ...COMP_DEFAULT, amount: 0 };
   const lim = base.limiter ?? { ...LIMIT_DEFAULT, on: false };
-  const mode = c.amount <= 0 ? 'off' : c.mode;
+  const mode = c.amount <= 0 || c.on === false ? 'off' : c.mode;
   const edit = (fn, rebuild = true) => {
     const p = editablePatch();
     p.comp = p.comp ?? { ...COMP_DEFAULT };
@@ -730,7 +730,7 @@ function buildDynamicsStrip() {
         onclick: () => edit((p) => {
           const x = p.comp;
           if (v === 'off') { if (x.amount > 0) x.lastAmount = x.amount; x.amount = 0; }
-          else { x.mode = v; if (x.amount <= 0) x.amount = x.lastAmount || 0.3; }
+          else { x.mode = v; x.on = true; if (x.amount <= 0) x.amount = x.lastAmount || 0.3; }
         }),
       }, label))),
     slider('Comp', c.amount, { min: 0, max: 1, step: 0.01 }, 'How hard the compressor squeezes', (p, v) => { p.comp.amount = v; }),
@@ -794,7 +794,7 @@ function buildTextureStrip() {
     ctl('Hiss', 'texture.hiss', t.hiss, 'Tape hiss'),
     ctl('Air', 'noise.air', base.noise?.air, 'Breathy noise inside the sound, shaped by the filter and envelope'),
   );
-  foldable(root, 'texture', [t.crackle > 0 ? `crackle ${Math.round(t.crackle * 100)}%` : '', t.hiss > 0 ? `hiss ${Math.round(t.hiss * 100)}%` : '', (base.noise?.air ?? 0) > 0 ? `air ${Math.round(base.noise.air * 100)}%` : ''].filter(Boolean).join(' · ') || 'Off');
+  foldable(root, 'texture', t.on === false ? 'Off' : [t.crackle > 0 ? `crackle ${Math.round(t.crackle * 100)}%` : '', t.hiss > 0 ? `hiss ${Math.round(t.hiss * 100)}%` : '', (base.noise?.air ?? 0) > 0 ? `air ${Math.round(base.noise.air * 100)}%` : ''].filter(Boolean).join(' · ') || 'Off');
 }
 
 // ---------------------------------------------------------------- sound design panel
@@ -814,7 +814,31 @@ function buildSoundPanel() {
     const det = el('details', { 'data-id': sec.id });
     if (openIds.has(sec.id)) det.open = true;
     const locked = state.settings.locks[sec.lock];
-    det.append(el('summary', {}, sec.label, locked ? el('span', { class: 'lock-tag' }, 'locked') : null));
+    // Effect panels: an on/off switch per effect in the header.
+    const isOn = (path) => (path === 'limiter.on' ? !!getPath(p, path) : getPath(p, path) !== false);
+    const switches = (sec.switches ?? []).map(([path, label]) => {
+      const on = isOn(path);
+      const b = el('button', {
+        class: `fx-switch${on ? ' on' : ''}`, 'aria-pressed': String(on),
+        title: `${on ? 'Turn off' : 'Turn on'} ${label === 'On' ? sec.label.toLowerCase() : label.toLowerCase()}`,
+        onclick: (e) => {
+          e.preventDefault(); e.stopPropagation(); // don't open/close the panel
+          const now = !isOn(path);
+          setPath(editablePatch(), path, now);
+          markEdited();
+          if (path.startsWith('delay.')) buildDelayStrip();
+          if (path.startsWith('texture.')) buildTextureStrip();
+          if (path.startsWith('comp.') || path.startsWith('limiter.')) buildDynamicsStrip();
+          buildSoundPanel();
+          regenerate({ audition: true });
+        },
+      }, el('span', { class: 'dot', 'aria-hidden': 'true' }), label === 'On' ? (on ? 'On' : 'Off') : label);
+      return b;
+    });
+    const allOff = switches.length > 0 && (sec.switches ?? []).every(([path]) => !isOn(path));
+    det.classList.toggle('fx-off', allOff);
+    det.append(el('summary', {}, el('span', { class: 'sum-title' }, sec.label),
+      el('span', { class: 'sum-right' }, ...switches, locked ? el('span', { class: 'lock-tag' }, 'locked') : null)));
     const grid = el('div', { class: 'grid2' });
     const oscType = sec.id.startsWith('osc') ? getPath(p, `osc.${Number(sec.id.slice(3)) - 1}.type`) : null;
     for (const prm of sec.params) {

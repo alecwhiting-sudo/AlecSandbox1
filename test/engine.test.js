@@ -247,3 +247,25 @@ test('same chord, different sounds: fixed chord with a different character per p
   // Variations mode keeps one character.
   assert.ok(generateKit({ ...s, soundMode: 'variations' }).every((k) => !k.info.character));
 });
+
+test('effect switches: an effect switched off renders exactly as if it were absent', async () => {
+  const { renderStab, withBypass } = await import('../src/dsp/render.js');
+  const { presetPatch } = await import('../src/engine/presets.js');
+  const base = presetPatch('dusty-tape');
+  assert.equal(withBypass(base), base); // nothing switched off: untouched
+  const notes = [57, 60, 64];
+  const opts = { sr: 24000, bpm: 124, seed: 3 };
+  const same = (a, b) => a.dry[0].length === b.dry[0].length && a.dry[0].every((x, i) => x === b.dry[0][i]) && a.wet[0].every((x, i) => x === b.wet[0][i]);
+  const off = (k) => ({ ...base, [k]: { ...base[k], on: false } });
+  // delay / reverb off == send 0
+  assert.ok(same(renderStab(off('delay'), notes, opts), renderStab({ ...base, delay: { ...base.delay, send: 0 } }, notes, opts)));
+  assert.ok(same(renderStab(off('reverb'), notes, opts), renderStab({ ...base, reverb: { ...base.reverb, send: 0 } }, notes, opts)));
+  // saturation off == mode off; texture off == no crackle or hiss
+  assert.ok(same(renderStab(off('colour'), notes, opts), renderStab({ ...base, colour: { ...base.colour, mode: 'off' } }, notes, opts)));
+  assert.ok(same(renderStab(off('texture'), notes, opts), renderStab({ ...base, texture: { ...base.texture, crackle: 0, hiss: 0 } }, notes, opts)));
+  // switching off really changes the sound
+  assert.ok(!same(renderStab(off('delay'), notes, opts), renderStab(base, notes, opts)));
+  assert.ok(!same(renderStab(off('eq'), notes, opts), renderStab(base, notes, opts)));
+  // the switch doesn't touch the knob settings underneath
+  assert.equal(off('delay').delay.send, base.delay.send);
+});

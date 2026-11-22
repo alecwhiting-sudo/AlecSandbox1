@@ -156,7 +156,27 @@ function makeSidechain(sr, bpm, sc, total, external) {
  * @param {object} opts { sr, bpm, seed, maxTail, sidechainSignal }
  * @returns {{sr:number, dry:[Float32Array,Float32Array], wet:[Float32Array,Float32Array], length:number, dryLength:number}}
  */
+/**
+ * Effects switched off in the panels (`<effect>.on === false`) are bypassed:
+ * returns a copy of the patch with those effects neutral. Patches without
+ * switches (or with everything on) come back unchanged.
+ */
+export function withBypass(patch) {
+  const off = (k) => patch[k]?.on === false;
+  if (!['colour', 'transient', 'chorus', 'eq', 'comp', 'texture', 'delay', 'reverb'].some(off)) return patch;
+  const p = { ...patch };
+  if (off('colour')) p.colour = { ...p.colour, mode: 'off' };
+  if (off('transient')) p.transient = { ...p.transient, attack: 0, sustain: 0 };
+  if (off('chorus')) p.chorus = { ...p.chorus, mix: 0 };
+  if (off('comp')) p.comp = { ...p.comp, amount: 0 };
+  if (off('texture')) p.texture = { ...p.texture, crackle: 0, hiss: 0 };
+  if (off('delay')) p.delay = { ...p.delay, send: 0 };
+  if (off('reverb')) p.reverb = { ...p.reverb, send: 0 };
+  return p; // eq: checked in renderStab
+}
+
 export function renderStab(patch, notes, opts = {}) {
+  patch = withBypass(patch);
   const sr = opts.sr ?? 48000;
   const bpm = opts.bpm ?? 124;
   const rng = new Rng(opts.seed ?? 1);
@@ -178,6 +198,7 @@ export function renderStab(patch, notes, opts = {}) {
   const trans = new TransientShaper(sr, patch.transient?.attack ?? 0, patch.transient?.sustain ?? 0);
   const chorus = new Chorus(sr, patch.chorus);
   const eq = new OutputEQ(sr, patch.eq);
+  const eqOn = patch.eq?.on !== false;
   const delay = hasDelay ? new StereoDelay(sr, bpm, patch.delay, rng.fork('delay')) : null;
   const texture = new Texture(sr, rng.fork('texture'), patch.texture ?? {});
   const comp = new Compressor(sr, patch.comp ?? {});
@@ -220,8 +241,8 @@ export function renderStab(patch, notes, opts = {}) {
         l *= voiceGain; r *= voiceGain;
       }
       sat.process(l, r); trans.process(sat.l, sat.r); chorus.process(trans.l, trans.r);
-      eq.process(chorus.l, chorus.r);
-      l = dcL.process(eq.l); r = dcR.process(eq.r);
+      if (eqOn) { eq.process(chorus.l, chorus.r); l = dcL.process(eq.l); r = dcR.process(eq.r); }
+      else { l = dcL.process(chorus.l); r = dcR.process(chorus.r); }
       const mid = (l + r) * 0.5, side = (l - r) * 0.5 * width;
       l = mid + side; r = mid - side;
       // Stab compression: shapes the hit before it feeds the delay and reverb.

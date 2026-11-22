@@ -236,3 +236,11 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
   .pads { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .knob svg { width: 54px; height: 54px; }
 }
+
+/* Effect on/off switches in the sound panel headers */
+.sound summary .sum-right { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.fx-switch { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-light); background: transparent; color: var(--muted, #999); cursor: pointer; }
+.fx-switch .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; }
+.fx-switch.on { color: inherit; border-color: var(--accent, #ff5a1f); }
+.fx-switch.on .dot { background: var(--accent, #ff5a1f); box-shadow: 0 0 6px var(--accent, #ff5a1f); }
+.sound details.fx-off > .grid2 { opacity: 0.45; }
