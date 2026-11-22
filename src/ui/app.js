@@ -201,7 +201,7 @@ function fmt(v, unit, step) {
   const dec = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
   return `${Number(v).toFixed(dec)}${unit ? ' ' + unit : ''}`;
 }
-function rangeInput({ label, min, max, step, scale, unit }, value, onChange, cls = '') {
+function rangeInput({ label, min, max, step, scale, unit, title }, value, onChange, cls = '') {
   const log = scale === 'log' && min > 0;
   const toSlider = (v) => (log ? Math.log(v / min) / Math.log(max / min) * 1000 : v);
   const fromSlider = (x) => {
@@ -222,7 +222,7 @@ function rangeInput({ label, min, max, step, scale, unit }, value, onChange, cls
     val.textContent = fmt(v, unit, step);
     onChange(v);
   });
-  return el('div', { class: `ctl ${cls}` }, el('label', {}, el('span', {}, label), val), input);
+  return el('div', { class: `ctl ${cls}`, title }, el('label', {}, el('span', {}, label), val), input);
 }
 
 // Rotary knob for macros, drawn like RatMode's KnobPainter (UIConstants.h):

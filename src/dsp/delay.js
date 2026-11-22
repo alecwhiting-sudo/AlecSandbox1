@@ -84,6 +84,9 @@ export class StereoDelay {
     const size = Math.ceil(3.2 * sr);
     this.L = new Line(size); this.R = new Line(size);
     this.fb = clamp(p.feedback ?? 0.4, 0, 0.97);
+    // Stereo width of the echoes: 1 = as wide as the mode makes them (ping-pong
+    // bounces hard left/right), 0 = all echoes in the centre.
+    this.width = clamp(p.width ?? 1, 0, 1);
     // Gap loss: tape darkens more as grit rises.
     const lpf = (p.lpf ?? 5000) * (tape ? Math.pow(2, -this.grit * 1.3) : 1);
     this.lp = [new OnePoleLP(sr, lpf), new OnePoleLP(sr, lpf)];
@@ -156,6 +159,10 @@ export class StereoDelay {
     } else {
       this.L.write(inL + fL * this.fb);
       this.R.write(inR + fR * this.fb);
+    }
+    if (this.width < 1) {
+      const mid = (yL + yR) * 0.5, side = (yL - yR) * 0.5 * this.width;
+      yL = mid + side; yR = mid - side;
     }
     this.l = yL; this.r = yR;
   }

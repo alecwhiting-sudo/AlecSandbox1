@@ -170,3 +170,19 @@ test('square is a true 50% square matching pulse at width 0.5', () => {
   assert.ok(Math.abs(mean / sq.length) < 0.02, 'no DC');
   assert.ok(Math.abs(high / sq.length - 0.5) < 0.02, '50% duty');
 });
+
+test('delay width: 1 = full ping-pong, 0 = echoes in the centre', async () => {
+  const { StereoDelay } = await import('../src/dsp/delay.js');
+  const run = (width) => {
+    const d = new StereoDelay(48000, 120, { mode: 'pingpong', division: '1/8', feedback: 0.5, width, wow: 0, sat: 0 });
+    let side = 0, mid = 0;
+    for (let i = 0; i < 48000; i++) { d.process(i < 64 ? 1 : 0, i < 64 ? 1 : 0); side += Math.abs(d.l - d.r); mid += Math.abs(d.l + d.r); }
+    return side / mid;
+  };
+  const full = run(1), half = run(0.5), none = run(0);
+  assert.ok(full > 0.9, `full ${full}`);
+  assert.ok(Math.abs(half - full / 2) < 0.05, `half ${half}`);
+  assert.ok(none < 1e-9, `none ${none}`);
+  // old patches without a width sound exactly as before
+  assert.equal(new StereoDelay(48000, 120, { mode: 'pingpong' }).width, 1);
+});
