@@ -6,10 +6,10 @@ import { PRESETS, PRESET_BY_ID, presetPatch } from '../engine/presets.js';
 import { defaultKitSettings, generateKit, mutateStab, baseChordFor, CHORD_MODES, settingsKey, KEY_CHANGES } from '../engine/variation.js';
 import { CHORD_TYPES, NOTE_NAMES, SCALES, noteName } from '../music/theory.js';
 import { randomChord, mutateChord, VOICINGS, PROGRESSIONS } from '../music/chords.js';
-import { defaultExportSettings, prepareStab, normaliseGains, stabFiles, stabFileBase, kitFolderName, encodeWav, finalLength } from '../engine/export.js';
+import { defaultExportSettings, prepareStab, normaliseGains, stabFiles, stabFileBase, kitFolderName, downloadFolderName, makeZip, encodeWav, finalLength } from '../engine/export.js';
 import { Rng } from '../dsp/rng.js';
 import { renderStab } from '../dsp/render.js';
-import { FolderLink, CURRENT_DIR, KEPT_DIR } from './folderlink.js';
+import { FolderLink, CURRENT_DIR, KEPT_DIR, writeFile } from './folderlink.js';
 import { detectNotes, toMono } from '../music/detect.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -1316,17 +1316,68 @@ function padWav(i) {
   return { data: encodeWav(chs, p.sr, state.ex.bitDepth), name: `${padFileBase(i)}${suffix}.wav` };
 }
 
+// ---------------------------------------------------------------- download folders
+// Every download gets its own folder named after the root chord, key,
+// character, date and time, so downloads never mix.
+const kitCharacter = (kit) => (state.settings.soundMode === 'mixed' ? `${kit.presetName} mixed` : kit.presetName);
+function kitDownloadFolder(when = new Date()) {
+  const kit = kitMeta();
+  return downloadFolderName({ chord: state.stabs[0]?.chord.name, key: kit.key, scale: kit.scale, character: kitCharacter(kit), when });
+}
+function padDownloadFolder(i, when = new Date()) {
+  const kit = kitMeta(), st = state.stabs[i];
+  // With a key change, the pad's own key ("Cm", "Eb") replaces the kit's.
+  const own = st.info?.key ? NOTE_NAMES.indexOf(st.info.key.replace(/m$/, '')) : -1;
+  return downloadFolderName({ chord: st.chord.name, key: own >= 0 ? own : kit.key, scale: kit.scale, character: st.info?.character ?? kit.presetName, when });
+}
+
+// Chrome/Edge: the parent folder picked for downloads, remembered for this
+// session so single-pad downloads don't ask every time.
+let downloadDir = null;
+async function pickDownloadDir(force = false) {
+  if (!window.showDirectoryPicker) return null;
+  if (downloadDir && !force) {
+    try { if ((await downloadDir.queryPermission({ mode: 'readwrite' })) === 'granted') return downloadDir; } catch { /* re-pick */ }
+  }
+  downloadDir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'stablab-export' }); // throws AbortError if cancelled
+  return downloadDir;
+}
+
+/**
+ * Save files into a new folder: inside a picked folder (Chrome/Edge), or as
+ * one .zip holding that folder (other browsers, which can't make folders).
+ */
+async function saveFolder(name, files, dir) {
+  if (dir) {
+    const sub = await dir.getDirectoryHandle(name, { create: true });
+    for (const [n, f] of files.entries()) {
+      await writeFile(sub, f.name, f.data);
+      if (files.length > 2) $('#status').textContent = `Writing ${n + 1}/${files.length}…`;
+    }
+    return `${dir.name}/${name}/`;
+  }
+  await downloadBlob(makeZip(files.map((f) => ({ name: `${name}/${f.name}`, data: f.data }))), `${name}.zip`, 'application/zip');
+  return `${name}.zip`;
+}
+
 async function downloadPad(i) {
   const w = padWav(i);
   if (!w) return;
+  const sub = padDownloadFolder(i);
   if (folder.state === 'linked') {
     try {
-      const name = await folder.keep(w.name, w.data);
+      const name = await folder.keep(w.name, w.data, sub);
       $('#status').textContent = `Saved to ${KEPT_DIR}/${name}`;
     } catch (err) { $('#status').textContent = `Couldn't save to the linked folder (${err.message})`; }
     return;
   }
-  downloadBlob(w.data, w.name, 'audio/wav');
+  if (inArtifact) { downloadBlob(w.data, w.name, 'audio/wav'); return; }
+  let dir = null;
+  try { dir = await pickDownloadDir(); } catch (err) { if (err?.name === 'AbortError') return; }
+  try {
+    const where = await saveFolder(sub, [{ name: w.name, data: w.data }], dir);
+    $('#status').textContent = `Saved ${w.name} to ${where}`;
+  } catch (err) { $('#status').textContent = `Couldn't save (${err.message})`; }
 }
 
 // ---------------------------------------------------------------- linked folder (Ableton)
@@ -1426,57 +1477,34 @@ function onDragStart(e, i) {
   e.dataTransfer.effectAllowed = 'copy';
 }
 
-// Export every stab as individual WAV files.
-// Chrome/Edge: write straight into a folder the user picks (with a stems/ subfolder).
-// Other browsers: download the WAVs one after another.
+// Export every stab as WAV files into a new folder of their own (named by
+// root chord, key, character, date and time), with a stems/ subfolder.
+// Chrome/Edge: inside a folder the user picks. Other browsers: one .zip of
+// that folder, since they can't create folders.
 $('#btn-export').addEventListener('click', async () => {
   if (inArtifact) { showNotice(NO_WAV_MSG); return; }
   const btn = $('#btn-export');
   let dir = null;
-  if (window.showDirectoryPicker) {
-    try {
-      dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'stablab-export' });
-    } catch (err) {
-      if (err?.name === 'AbortError') return; // user cancelled the folder picker
-      dir = null;
-    }
-  }
+  try { dir = await pickDownloadDir(true); } catch (err) { if (err?.name === 'AbortError') return; dir = null; }
   btn.disabled = true;
   $('#status').textContent = 'Preparing export…';
   await allRendered();
   const kit = kitMeta();
-  const folder = kitFolderName(kit);
+  const name = kitDownloadFolder();
   const files = [];
   state.stabs.forEach((st, i) => {
     const p = prepared(i);
     if (p) files.push(...stabFiles(p, padFileBase(i, kit), state.ex));
   });
+  const manifest = {
+    app: 'Stab Lab', version: 1, created: new Date().toISOString(),
+    settings: state.settings, export: state.ex,
+    stabs: state.stabs.map((s) => ({ index: s.index + 1, chord: s.chord.name, notes: s.chord.notes.map(noteName), tail: s.info?.tailLabel, character: s.info?.character ?? kit.presetName })),
+  };
+  files.push({ name: 'kit.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
   try {
-    if (dir) {
-      const kitDir = await dir.getDirectoryHandle(folder, { create: true });
-      const manifest = {
-        app: 'Stab Lab', version: 1, created: new Date().toISOString(),
-        settings: state.settings, export: state.ex,
-        stabs: state.stabs.map((s) => ({ index: s.index + 1, chord: s.chord.name, notes: s.chord.notes.map(noteName), tail: s.info?.tailLabel })),
-      };
-      files.push({ name: 'kit.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) });
-      for (const [n, f] of files.entries()) {
-        const parts = f.name.split('/');
-        let d = kitDir;
-        for (const part of parts.slice(0, -1)) d = await d.getDirectoryHandle(part, { create: true });
-        const w = await (await d.getFileHandle(parts.at(-1), { create: true })).createWritable();
-        await w.write(f.data); await w.close();
-        $('#status').textContent = `Writing ${n + 1}/${files.length}…`;
-      }
-      $('#status').textContent = `Saved ${state.stabs.length} stabs to ${folder}/`;
-    } else {
-      for (const [n, f] of files.entries()) {
-        await downloadBlob(f.data, f.name.split('/').at(-1), 'audio/wav');
-        $('#status').textContent = `Downloading ${n + 1}/${files.length}…`;
-        await new Promise((r) => setTimeout(r, 250)); // browsers drop rapid-fire downloads
-      }
-      $('#status').textContent = `Downloaded ${files.length} WAV files`;
-    }
+    const where = await saveFolder(name, files, dir);
+    $('#status').textContent = `Saved ${state.stabs.length} stabs to ${where}`;
   } catch (err) {
     $('#status').textContent = `Export failed (${err.message})`;
   }

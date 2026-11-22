@@ -38,7 +38,7 @@ async function dbGet() {
   } catch { return null; }
 }
 
-async function writeFile(dir, path, data) {
+export async function writeFile(dir, path, data) {
   const parts = path.split('/');
   let d = dir;
   for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
@@ -140,15 +140,16 @@ export class FolderLink {
     }
   }
 
-  /** Save one file into the "kept" folder (never overwritten by sync). */
-  async keep(name, data) {
-    const dir = await this.handle.getDirectoryHandle(KEPT_DIR, { create: true });
+  /** Save one file into the "kept" folder (never overwritten by sync), optionally in its own subfolder. */
+  async keep(name, data, sub = '') {
+    let dir = await this.handle.getDirectoryHandle(KEPT_DIR, { create: true });
+    if (sub) dir = await dir.getDirectoryHandle(sub, { create: true });
     let final = name, n = 2;
     // Don't overwrite an earlier keeper with the same name.
     for (;;) {
       try { await dir.getFileHandle(final); final = name.replace(/\.wav$/, ` (${n++}).wav`); } catch { break; }
     }
     await writeFile(dir, final, data);
-    return final;
+    return sub ? `${sub}/${final}` : final;
   }
 }

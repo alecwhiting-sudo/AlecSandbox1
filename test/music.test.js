@@ -63,3 +63,13 @@ test('mutation changes the chord and follows the dissonance target', () => {
   }
   assert.ok(low < high, `${low} vs ${high}`);
 });
+
+test('download folders: root chord, key, character, date and time', async () => {
+  const { downloadFolderName } = await import('../src/engine/export.js');
+  const when = new Date(2026, 10, 22, 14, 5, 33);
+  assert.equal(downloadFolderName({ chord: 'Am7', key: 9, scale: 'minor', character: 'Dub Techno Chord', when }), 'Am7_A-minor_Dub-Techno-Chord_2026-11-22_14-05-33');
+  // sharps are spelled out, and a missing character is simply left out
+  assert.equal(downloadFolderName({ chord: 'F#m9', key: 6, scale: 'dorian', when }), 'Fsm9_Fs-dorian_2026-11-22_14-05-33');
+  // a second later is a different folder
+  assert.notEqual(downloadFolderName({ chord: 'Am7', key: 9, scale: 'minor', when }), downloadFolderName({ chord: 'Am7', key: 9, scale: 'minor', when: new Date(when.getTime() + 1000) }));
+});
