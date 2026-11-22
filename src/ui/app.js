@@ -1318,17 +1318,17 @@ function padWav(i) {
 
 // ---------------------------------------------------------------- download folders
 // Every download gets its own folder named after the root chord, key,
-// character, date and time, so downloads never mix.
+// tempo, character, date and time, so downloads never mix.
 const kitCharacter = (kit) => (state.settings.soundMode === 'mixed' ? `${kit.presetName} mixed` : kit.presetName);
 function kitDownloadFolder(when = new Date()) {
   const kit = kitMeta();
-  return downloadFolderName({ chord: state.stabs[0]?.chord.name, key: kit.key, scale: kit.scale, character: kitCharacter(kit), when });
+  return downloadFolderName({ chord: state.stabs[0]?.chord.name, key: kit.key, scale: kit.scale, bpm: kit.bpm, character: kitCharacter(kit), when });
 }
 function padDownloadFolder(i, when = new Date()) {
   const kit = kitMeta(), st = state.stabs[i];
   // With a key change, the pad's own key ("Cm", "Eb") replaces the kit's.
   const own = st.info?.key ? NOTE_NAMES.indexOf(st.info.key.replace(/m$/, '')) : -1;
-  return downloadFolderName({ chord: st.chord.name, key: own >= 0 ? own : kit.key, scale: kit.scale, character: st.info?.character ?? kit.presetName, when });
+  return downloadFolderName({ chord: st.chord.name, key: own >= 0 ? own : kit.key, scale: kit.scale, bpm: kit.bpm, character: st.info?.character ?? kit.presetName, when });
 }
 
 // Chrome/Edge: the parent folder picked for downloads, remembered for this
@@ -1478,7 +1478,7 @@ function onDragStart(e, i) {
 }
 
 // Export every stab as WAV files into a new folder of their own (named by
-// root chord, key, character, date and time), with a stems/ subfolder.
+// root chord, key, tempo, character, date and time), with a stems/ subfolder.
 // Chrome/Edge: inside a folder the user picks. Other browsers: one .zip of
 // that folder, since they can't create folders.
 $('#btn-export').addEventListener('click', async () => {

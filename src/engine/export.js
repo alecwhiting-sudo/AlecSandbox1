@@ -174,17 +174,17 @@ export function kitFolderName(kit) {
 }
 
 /**
- * Folder for one download: root chord, key, character and the date and time,
- * so every download gets its own folder and nothing mixes, e.g.
- * "Am7_A-minor_Dub-Techno-Chord_2026-11-22_14-05-33".
- * @param {{chord?:string, key:number, scale:string, character?:string, when?:Date}} o
+ * Folder for one download: root chord, key, tempo, character and the date
+ * and time, so every download gets its own folder and nothing mixes, e.g.
+ * "Am7_A-minor_124bpm_Dub-Techno-Chord_2026-11-22_14-05-33".
+ * @param {{chord?:string, key:number, scale:string, bpm?:number, character?:string, when?:Date}} o
  */
-export function downloadFolderName({ chord, key, scale, character, when = new Date() }) {
+export function downloadFolderName({ chord, key, scale, bpm, character, when = new Date() }) {
   const p2 = (n) => String(n).padStart(2, '0');
   const date = `${when.getFullYear()}-${p2(when.getMonth() + 1)}-${p2(when.getDate())}`;
   const time = `${p2(when.getHours())}-${p2(when.getMinutes())}-${p2(when.getSeconds())}`;
   const keyName = `${NOTE_NAMES[key]}-${scale}`;
-  return [chord, keyName, character, date, time].filter(Boolean).map(safe).filter(Boolean).join('_');
+  return [chord, keyName, bpm ? `${Math.round(bpm)}bpm` : '', character, date, time].filter(Boolean).map(safe).filter(Boolean).join('_');
 }
 
 /** Files to write for one prepared stab. */
